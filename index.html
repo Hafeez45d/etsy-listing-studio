@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Etsy Listing Studio</title>
+<style>
+:root {
+  --bg-deep: #0a0a0f;
+  --bg-surface: #12121a;
+  --bg-card: #1a1a26;
+  --bg-elevated: #22223a;
+  --bg-input: #161622;
+  --border: #2a2a3e;
+  --border-focus: #4a4a6e;
+  --text-primary: #e8e8f0;
+  --text-secondary: #9898b8;
+  --text-muted: #6a6a88;
+  --accent: #f1645c;
+  --accent-dim: #d4544c;
+  --accent-glow: rgba(241, 100, 92, 0.2);
+  --green: #34d399;
+  --green-dim: #059669;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.navbar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.navbar-logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+.navbar-logo span { color: var(--text-secondary); font-weight: 400; }
+
+.nav-links {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.nav-link {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+.nav-link:hover { color: var(--text-primary); background: var(--bg-card); }
+.nav-link.active { color: var(--accent); background: var(--accent-glow); }
+
+.etsy-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  white-space: nowrap;
+}
+.etsy-status.connected { border-color: var(--green-dim); color: var(--green); }
+.etsy-status.disconnected { color: var(--text-muted); }
+.etsy-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.etsy-status.connected .etsy-dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.page { display: none; }
+.page.active { display: block; animation: fadeSlide 0.3s ease; }
+
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.card-title { font-size: 18px; font-weight: 600; }
+.card-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid-full { grid-template-columns: 1fr; }
+
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.form-input, .form-textarea, .form-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.form-textarea { min-height: 100px; resize: vertical; }
+.form-select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239898b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+.form-hint { font-size: 12px; color: var(--text-muted); }
+.char-count { font-size: 11px; color: var(--text-muted); text-align: right; }
+
+.btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dim); transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
+.btn-secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--text-muted); background: var(--bg-card); }
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { color: var(--text-primary); background: var(--bg-card); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-danger { background: transparent; color: #f87171; border: 1px solid #7f1d1d; }
+.btn-danger:hover { background: #7f1d1d20; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--bg-input);
+}
+.upload-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+.upload-zone.drag-over { border-color: var(--accent); background: var(--accent-glow); }
+.upload-zone-icon { font-size: 36px; margin-bottom: 12px; }
+.upload-zone-text { font-size: 14px; color: var(--text-secondary); }
+.upload-zone-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
+.image-card {
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+}
+.image-card img { width: 100%; height: 100%; object-fit: cover; }
+.image-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.image-card:hover .image-card-overlay { opacity: 1; }
+
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 13px;
+}
+.tag-remove { cursor: pointer; color: var(--text-muted); font-size: 16px; line-height: 1; }
+.tag-remove:hover { color: #f87171; }
+
+.settings-section { margin-bottom: 28px; }
+.settings-section:last-child { margin-bottom: 0; }
+.settings-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-section-title .icon { font-size: 20px; }
+
+.api-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+.api-status.ok { background: #064e3b20; color: var(--green); }
+.api-status.none { background: var(--bg-input); color: var(--text-muted); }
+
+.listing-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  transition: border-color 0.2s;
+}
+.listing-card:hover { border-color: var(--border-focus); }
+.listing-card-img {
+  width: 80px; height: 80px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--bg-input);
+  flex-shrink: 0;
+}
+.listing-card-info { flex: 1; min-width: 0; }
+.listing-card-title { font-weight: 600; margin-bottom: 4px; }
+.listing-card-meta { font-size: 13px; color: var(--text-muted); }
+.listing-card-price { font-weight: 700; color: var(--accent); font-size: 16px; }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  z-index: 999;
+  animation: slideUp 0.3s ease;
+  font-size: 14px;
+  max-width: 380px;
+}
+.toast.success { border-color: var(--green-dim); border-left: 3px solid var(--green); }
+.toast.error { border-color: #7f1d1d; border-left: 3px solid #f87171; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.skeleton { animation: shimmer 1.5s infinite; background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-elevated) 50%, var(--bg-card) 75%); background-size: 200% 100%; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+.tab {
+  padding: 10px 18px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state-title { font-size: 18px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; }
+
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ai-generate-row { display: flex; gap: 8px; align-items: flex-end; }
+.ai-generate-row .form-group { flex: 1; }
+
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.checkbox-group { display: flex; align-items: center; gap: 10px; }
+.checkbox-group input[type="checkbox"] {
+  width: 18px; height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.checkbox-group label { font-size: 14px; cursor: pointer; }
+
+.pin-toggle {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pin-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.pin-toggle.pinned { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); }
+.pin-toggle.pinned::after { content: '📌'; font-size: 10px; }
+
+.field-header { display: flex; align-items: center; gap: 6px; }
+.field-header .form-label { flex: 1; }
+
+.defaults-card-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.defaults-card-row .key { color: var(--text-muted); font-size: 11px; text-transform: uppercase; min-width: 120px; }
+.defaults-card-row .val { color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.defaults-empty { padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+@media (max-width: 768px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .navbar { padding: 0 12px; gap: 8px; }
+  .nav-link { padding: 6px 10px; font-size: 12px; }
+  .navbar-logo { font-size: 16px; }
+  .etsy-status { font-size: 11px; padding: 4px 10px; }
+  .main { padding: 16px 12px; }
+  .card { padding: 18px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="navbar-logo">Etsy<span>Studio</span></div>
+  <button class="nav-link active" onclick="navigate('dashboard')">Dashboard</button>
+  <button class="nav-link" onclick="navigate('create')">Create Listing</button>
+  <button class="nav-link" onclick="navigate('settings')">Settings</button>
+  <div class="etsy-status disconnected" id="etsyStatus">
+    <div class="etsy-dot"></div>
+    <span id="etsyStatusText">Etsy: Offline</span>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Your Listings</div>
+          <div class="card-subtitle">Manage your Etsy listings and drafts</div>
+        </div>
+        <button class="btn btn-primary" onclick="navigate('create')">+ New Listing</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchDashboardTab(this, 'all')">All</button>
+        <button class="tab" onclick="switchDashboardTab(this, 'drafts')">Drafts</button>
+        <button class="tab" onclick="switchDashboardTab(this, 'published')">Active</button>
+        <button class="tab" onclick="switchDashboardTab(this, 'deactivated')">Inactive</button>
+      </div>
+      <div id="listings-container">
+        <div class="skeleton" style="height:100px;border-radius:var(--radius-lg);margin-bottom:12px;"></div>
+        <div class="skeleton" style="height:100px;border-radius:var(--radius-lg);margin-bottom:12px;"></div>
+      </div>
+    </div>
+
+    <!-- Field Defaults -->
+    <div class="card" id="defaults-card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Field Defaults</div>
+          <div class="card-subtitle">Saved field values auto-applied to new listings. Toggle the 📌 pin on any field in Create Listing.</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="clearAllDefaults()">Clear All</button>
+      </div>
+      <div id="defaults-container"><div class="defaults-empty">No defaults saved yet</div></div>
+    </div>
+  </div>
+
+  <!-- CREATE LISTING -->
+  <div class="page" id="page-create">
+    <!-- Photos & Videos -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Photo & Video</div>
+          <div class="card-subtitle">Show off different angles. Add up to 20 photos and 2 videos.</div>
+        </div>
+        <span class="char-count" id="imageCount">0 / 20 images</span>
+      </div>
+      <div class="upload-zone" id="imageUploadZone" onclick="document.getElementById('imageInput').click()">
+        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-text">Drag and drop files or click to upload</div>
+        <div class="upload-zone-hint">JPG, PNG, WebP — max 20 files</div>
+      </div>
+      <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" multiple hidden onchange="handleImageUpload(this.files)">
+      <div class="image-grid" id="imageGrid"></div>
+    </div>
+
+    <!-- AI Image Generator -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">AI Image Generator</div>
+          <div class="card-subtitle">Generate images using AI to add to your listing</div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">Image Prompt</label>
+          <textarea class="form-textarea" id="aiImagePrompt" placeholder="Describe the image you want to generate..." style="min-height:60px;"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">AI Provider</label>
+          <select class="form-select" id="aiImageProvider">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI (DALL-E)</option>
+          </select>
+        </div>
+        <div class="form-group" style="justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="generateAIImage()" id="btnGenerateImage">
+            <span>✨</span> Generate Image
+          </button>
+        </div>
+      </div>
+      <div id="aiImagePreview" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- Item Details -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Item Details</div>
+          <div class="card-subtitle">Help buyers understand your item better</div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" id="listingCategory">
+            <option value="">Select category...</option>
+            <option value="digital_prints">Digital Prints</option>
+            <option value="art">Art & Collectibles</option>
+            <option value="craft_supplies">Craft Supplies</option>
+            <option value="paper_party">Paper & Party Supplies</option>
+            <option value="home_living">Home & Living</option>
+            <option value="jewelry">Jewelry</option>
+            <option value="clothing">Clothing</option>
+            <option value="accessories">Accessories</option>
+            <option value="electronics">Electronics</option>
+            <option value="toys_games">Toys & Games</option>
+            <option value="books_movies">Books, Movies & Music</option>
+            <option value="vintage">Vintage</option>
+            <option value="wedding">Wedding</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Item Type</label>
+          <select class="form-select" id="listingType">
+            <option value="download">Digital</option>
+            <option value="physical">Physical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">When was it made?</label>
+          <select class="form-select" id="listingYear">
+            <option value="">Select year range...</option>
+            <option value="2020_2026">2020 - 2026</option>
+            <option value="2010_2019">2010 - 2019</option>
+            <option value="2000_2009">2000 - 2009</option>
+            <option value="before_2000">Before 2000</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Title</label>
+          <div class="ai-generate-row">
+            <input class="form-input" id="listingTitle" placeholder="Make sure your title clearly describes what you're selling" maxlength="140">
+            <button class="btn btn-secondary btn-sm" onclick="aiGenerate('title')" title="AI Generate Title">✨</button>
+          </div>
+          <span class="char-count" id="titleCount">0/140</span>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Description</label>
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <button class="btn btn-secondary btn-sm" onclick="aiGenerate('description')">✨ Generate Description</button>
+          </div>
+          <textarea class="form-textarea" id="listingDescription" placeholder="What makes your item special? Include details about subject, format, style, file type, dimensions, usage rights..." style="min-height:150px;"></textarea>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Tags (up to 13)</label>
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <input class="form-input" id="tagInput" placeholder="Add a tag..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTag();}" style="flex:1;">
+            <button class="btn btn-secondary btn-sm" onclick="addTag()">Add</button>
+            <button class="btn btn-secondary btn-sm" onclick="aiGenerate('tags')" title="AI Generate Tags">✨</button>
+          </div>
+          <div class="tag-list" id="tagList"></div>
+          <span class="char-count" id="tagCount">0/13 tags</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Digital Files -->
+    <div class="card" id="digitalFilesCard">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Digital Files</div>
+          <div class="card-subtitle">Buyers can download these files after purchase. Add up to 5 files. Max 20MB each.</div>
+        </div>
+        <span class="char-count" id="fileCount">0 / 5 files</span>
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('fileInput').click()" style="padding:24px;">
+        <div class="upload-zone-text">Drag and drop or click to add files</div>
+        <div class="upload-zone-hint">PDF, ZIP, PNG, JPG, SVG, AI, EPS — max 20MB each</div>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.zip,.png,.jpg,.jpeg,.svg,.ai,.eps,.psd" multiple hidden onchange="handleFileUpload(this.files)">
+      <div id="digitalFilesList" style="margin-top:12px;"></div>
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label">Note to buyers for digital items</label>
+        <textarea class="form-textarea" id="digitalNote" style="min-height:60px;">Your files are ready! Please download all files immediately. If you face any technical issue, contact me, and I will resolve it quickly. Thank you for shopping with InspiredWallGallery!</textarea>
+      </div>
+    </div>
+
+    <!-- Attributes -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Attributes</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Primary Color</label>
+          <input class="form-input" id="primaryColor" placeholder="e.g., Blue, Neutral, Gold">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Materials (comma separated)</label>
+          <input class="form-input" id="materials" placeholder="e.g., Paper, Canvas, Vinyl">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Width</label>
+          <input class="form-input" id="dimWidth" placeholder="e.g., 8" type="number" step="0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Height</label>
+          <input class="form-input" id="dimHeight" placeholder="e.g., 10" type="number" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Price & Inventory -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Price & Inventory</div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Price (USD)</label>
+          <input class="form-input" id="listingPrice" placeholder="0.00" type="number" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input class="form-input" id="listingQuantity" placeholder="999" type="number" min="0" value="999">
+        </div>
+        <div class="form-group">
+          <label class="form-label">SKU (optional)</label>
+          <input class="form-input" id="listingSKU" placeholder="SKU-001">
+        </div>
+      </div>
+    </div>
+
+    <!-- Physical Listing: Shipping & Readiness Profiles -->
+    <div class="card" id="physicalFieldsCard" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">Shipping & Processing (Physical Items)</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">Shipping Profile</label>
+          <div style="display:flex;gap:8px;">
+            <select class="form-select" id="shippingProfileId" style="flex:1;">
+              <option value="">Select or create a shipping profile...</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="fetchShippingProfiles()">🔄 Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="showCreateShippingProfile()">+ New</button>
+          </div>
+          <div class="form-hint">Required for physical listings. Defines shipping costs, origin country, and destination.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Origin Country (ISO)</label>
+          <select class="form-select" id="originCountryIso">
+            <option value="US">US - United States</option>
+            <option value="GB">GB - United Kingdom</option>
+            <option value="CA">CA - Canada</option>
+            <option value="AU">AU - Australia</option>
+            <option value="DE">DE - Germany</option>
+            <option value="FR">FR - France</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Destination</label>
+          <select class="form-select" id="destinationRegion">
+            <option value="none">No specific region</option>
+            <option value="eu">European Union</option>
+            <option value="non_eu">Non-EU</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Primary Shipping Cost ($)</label>
+          <input class="form-input" id="primaryCost" placeholder="0.00" type="number" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Secondary Shipping Cost ($)</label>
+          <input class="form-input" id="secondaryCost" placeholder="0.00" type="number" step="0.01" min="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Readiness State</label>
+          <div style="display:flex;gap:8px;">
+            <select class="form-select" id="readinessStateId" style="flex:1;">
+              <option value="">Select or create a readiness state...</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="fetchReadinessStates()">🔄 Refresh</button>
+            <button class="btn btn-ghost btn-sm" onclick="showCreateReadinessState()">+ New</button>
+          </div>
+          <div class="form-hint">Required for physical listings. Defines if item is ready to ship or made to order, plus processing time.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- How It's Made -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">How It's Made</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Who made it?</label>
+          <select class="form-select" id="whoMade">
+            <option value="i_did">I did</option>
+            <option value="collective">A member of my shop</option>
+            <option value="someone_else">Another company or person</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">What is it?</label>
+          <select class="form-select" id="whatIs">
+            <option value="finished_product">A finished product</option>
+            <option value="supply_or_tool">A supply or tool to make things</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">How is this digital content created?</label>
+          <select class="form-select" id="creationMethod">
+            <option value="created_by_me">Created by me — designed & created entirely by me</option>
+            <option value="ai_generated">With an AI generator — created with help from an AI generator</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Listing Settings</div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Shop Section</label>
+          <select class="form-select" id="shopSection">
+            <option value="">None</option>
+            <option value="wall_art">Wall Art</option>
+            <option value="prints">Prints</option>
+            <option value="digital_art">Digital Art</option>
+            <option value="posters">Posters</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Renewal Options</label>
+          <select class="form-select" id="renewalOption">
+            <option value="auto">Automatic (renews at $0.20 each)</option>
+            <option value="manual">Manual (I'll renew myself)</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <div class="checkbox-group">
+            <input type="checkbox" id="featureListing">
+            <label for="featureListing">Feature this listing at the top of your shop</label>
+          </div>
+        </div>
+        <div class="form-group full">
+          <div class="checkbox-group">
+            <input type="checkbox" id="etsyAds">
+            <label for="etsyAds">Promote with Etsy Ads</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display:flex;gap:12px;justify-content:flex-end;margin-bottom:40px;">
+      <button class="btn btn-secondary" onclick="saveDraft()">💾 Save as Draft</button>
+      <button class="btn btn-primary" onclick="publishListing()" id="btnPublish">🚀 Publish to Etsy</button>
+    </div>
+    <div id="publishProgress" style="margin-bottom:20px;"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="page-settings">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:24px;">API Settings</div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <span class="icon">🛒</span> Etsy API
+          <span class="api-status" id="etsyApiStatus">none</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Etsy API Key (Keystring)</label>
+            <input class="form-input" id="etsyApiKey" type="password" placeholder="Your Etsy app API keystring" onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Shared Secret</label>
+            <input class="form-input" id="etsySharedSecret" type="password" placeholder="Your Etsy app shared secret" onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">OAuth Access Token</label>
+            <input class="form-input" id="etsyAccessToken" type="password" placeholder="Bearer token from OAuth (listings_r listings_w)" onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Shop ID</label>
+            <input class="form-input" id="etsyShopId" placeholder="Your Etsy shop ID" onchange="saveSettings()">
+          </div>
+          <div class="form-group" style="justify-content:flex-end;">
+            <button class="btn btn-primary btn-sm" onclick="testEtsyConnection()">Test Connection</button>
+          </div>
+        </div>
+        <div class="form-hint" style="margin-top:8px;">x-api-key header format: keystring:shared_secret</div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <span class="icon">🤖</span> Google Gemini API
+          <span class="api-status" id="geminiApiStatus">none</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Gemini API Key</label>
+            <input class="form-input" id="geminiApiKey" type="password" placeholder="AIzaSy..." onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select class="form-select" id="geminiModel" onchange="saveSettings()">
+              <option value="gemini-pro">Gemini Pro (Text)</option>
+              <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Image Gen)</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+            </select>
+          </div>
+          <div class="form-group" style="justify-content:flex-end;">
+            <button class="btn btn-primary btn-sm" onclick="testGeminiConnection()">Test Connection</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <span class="icon">🧠</span> OpenAI API
+          <span class="api-status" id="openaiApiStatus">none</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">OpenAI API Key</label>
+            <input class="form-input" id="openaiApiKey" type="password" placeholder="sk-..." onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select class="form-select" id="openaiModel" onchange="saveSettings()">
+              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo</option>
+              <option value="dall-e-3">DALL-E 3 (Image Gen)</option>
+            </select>
+          </div>
+          <div class="form-group" style="justify-content:flex-end;">
+            <button class="btn btn-primary btn-sm" onclick="testOpenAIConnection()">Test Connection</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <span class="icon">🌊</span> DeepSeek API
+          <span class="api-status" id="deepseekApiStatus">none</span>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">DeepSeek API Key</label>
+            <input class="form-input" id="deepseekApiKey" type="password" placeholder="sk-..." onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <select class="form-select" id="deepseekModel" onchange="saveSettings()">
+              <option value="deepseek-chat">DeepSeek Chat (V3)</option>
+              <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+            </select>
+          </div>
+          <div class="form-group" style="justify-content:flex-end;">
+            <button class="btn btn-primary btn-sm" onclick="testDeepSeekConnection()">Test Connection</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:16px;">AI Content Generation Settings</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Default AI Provider</label>
+          <select class="form-select" id="defaultAIProvider" onchange="saveSettings()">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shop Name / Brand</label>
+          <input class="form-input" id="shopName" placeholder="Your shop name for AI context" onchange="saveSettings()">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── STATE ──────────────────────────────────
+const state = {
+  listings: JSON.parse(localStorage.getItem('etsyStudio_listings') || '[]'),
+  draft: JSON.parse(localStorage.getItem('etsyStudio_draft') || '{}'),
+  uploadedImages: [],
+  uploadedFiles: [],
+  tags: [],
+  dashboardTab: 'all'
+};
+
+// ─── SETTINGS MANAGEMENT ────────────────────
+function loadSettings() {
+  const keys = ['etsyApiKey','etsySharedSecret','etsyAccessToken','etsyShopId','geminiApiKey','geminiModel',
+    'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel','defaultAIProvider','shopName'];
+  keys.forEach(k => {
+    const el = document.getElementById(k);
+    if (el) {
+      const val = localStorage.getItem('etsyStudio_' + k) || '';
+      if (el.type === 'password') el.value = atobSafe(val);
+      else el.value = val;
+    }
+  });
+  updateAllApiStatuses();
+  updateEtsyNavStatus();
+}
+
+function saveSettings() {
+  const keys = ['etsyApiKey','etsySharedSecret','etsyAccessToken','etsyShopId','geminiApiKey','geminiModel',
+    'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel','defaultAIProvider','shopName'];
+  keys.forEach(k => {
+    const el = document.getElementById(k);
+    if (el) {
+      const val = el.type === 'password' ? btoaSafe(el.value) : el.value;
+      if (val) localStorage.setItem('etsyStudio_' + k, val);
+      else localStorage.removeItem('etsyStudio_' + k);
+    }
+  });
+  updateAllApiStatuses();
+  updateEtsyNavStatus();
+}
+
+function getXApiKey() {
+  const key = getSetting('etsyApiKey');
+  const secret = getSetting('etsySharedSecret');
+  if (key && secret) return key + ':' + secret;
+  return key;
+}
+
+function getSetting(k) {
+  const el = document.getElementById(k);
+  if (el) return el.value;
+  return localStorage.getItem('etsyStudio_' + k) || '';
+}
+
+function btoaSafe(s) { try { return btoa(unescape(encodeURIComponent(s))); } catch(e) { return ''; } }
+function atobSafe(s) { try { return decodeURIComponent(escape(atob(s))); } catch(e) { return ''; } }
+
+// ─── NAVIGATION ─────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(l => {
+    if (l.textContent.toLowerCase().includes(page)) l.classList.add('active');
+  });
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'create') restoreDraft();
+  if (page === 'settings') updateAllApiStatuses();
+}
+
+// ─── TOAST ──────────────────────────────────
+function showToast(msg, type = 'success') {
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
+  setTimeout(() => toast.remove(), 3300);
+}
+
+// ─── API STATUS ─────────────────────────────
+function updateAllApiStatuses() {
+  const etsyReady = !!(getSetting('etsyApiKey') && getSetting('etsySharedSecret') && getSetting('etsyAccessToken') && getSetting('etsyShopId'));
+  updateApiStatus('etsy', etsyReady);
+  updateApiStatus('gemini', !!getSetting('geminiApiKey'));
+  updateApiStatus('openai', !!getSetting('openaiApiKey'));
+  updateApiStatus('deepseek', !!getSetting('deepseekApiKey'));
+  updateEtsyNavStatus();
+}
+
+function updateApiStatus(provider, configured) {
+  const el = document.getElementById(provider + 'ApiStatus');
+  if (!el) return;
+  el.textContent = configured ? '✓ Configured' : 'Not set';
+  el.className = 'api-status ' + (configured ? 'ok' : 'none');
+}
+
+function updateEtsyNavStatus() {
+  const connected = !!(getSetting('etsyApiKey') && getSetting('etsySharedSecret') && getSetting('etsyAccessToken') && getSetting('etsyShopId'));
+  const el = document.getElementById('etsyStatus');
+  const text = document.getElementById('etsyStatusText');
+  el.className = 'etsy-status ' + (connected ? 'connected' : 'disconnected');
+  text.textContent = connected ? 'Etsy: Connected' : 'Etsy: Offline';
+}
+
+// ─── TEST CONNECTIONS ───────────────────────
+async function testEtsyConnection() {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) {
+    showToast('Please fill in all Etsy API fields (Keystring, Shared Secret, Token, Shop ID)', 'error');
+    return;
+  }
+  showToast('Testing Etsy connection...');
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}`, {
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`✓ Connected to Etsy shop: ${data.shop_name || shopId}`);
+    } else {
+      const err = await res.text();
+      showToast('Etsy connection failed: ' + (JSON.parse(err)?.error || res.status), 'error');
+    }
+  } catch(e) {
+    showToast('Etsy connection error: ' + e.message, 'error');
+  }
+}
+
+async function testGeminiConnection() {
+  const key = getSetting('geminiApiKey');
+  if (!key) { showToast('Please enter a Gemini API key', 'error'); return; }
+  showToast('Testing Gemini connection...');
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'Say "ok"' }] }] })
+    });
+    if (res.ok) showToast('✓ Gemini API connected');
+    else { const err = await res.json(); showToast('Gemini error: ' + (err.error?.message || 'Unknown'), 'error'); }
+  } catch(e) { showToast('Gemini connection error: ' + e.message, 'error'); }
+}
+
+async function testOpenAIConnection() {
+  const key = getSetting('openaiApiKey');
+  if (!key) { showToast('Please enter an OpenAI API key', 'error'); return; }
+  showToast('Testing OpenAI connection...');
+  try {
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` }
+    });
+    if (res.ok) showToast('✓ OpenAI API connected');
+    else showToast('OpenAI error: ' + res.status, 'error');
+  } catch(e) { showToast('OpenAI connection error: ' + e.message, 'error'); }
+}
+
+async function testDeepSeekConnection() {
+  const key = getSetting('deepseekApiKey');
+  if (!key) { showToast('Please enter a DeepSeek API key', 'error'); return; }
+  showToast('Testing DeepSeek connection...');
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: 'Say ok' }], max_tokens: 5 })
+    });
+    if (res.ok) showToast('✓ DeepSeek API connected');
+    else showToast('DeepSeek error: ' + res.status, 'error');
+  } catch(e) { showToast('DeepSeek connection error: ' + e.message, 'error'); }
+}
+
+// ─── IMAGE UPLOAD ───────────────────────────
+function handleImageUpload(files) {
+  for (const file of files) {
+    if (state.uploadedImages.length >= 20) { showToast('Maximum 20 images allowed', 'error'); break; }
+    if (!file.type.match(/image\/(jpeg|png|webp)/)) continue;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      state.uploadedImages.push({ name: file.name, data: e.target.result, file });
+      renderImages();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function removeImage(idx) { state.uploadedImages.splice(idx, 1); renderImages(); }
+
+function renderImages() {
+  const grid = document.getElementById('imageGrid');
+  grid.innerHTML = state.uploadedImages.map((img, i) => `
+    <div class="image-card">
+      <img src="${img.data}" alt="${img.name}">
+      <div class="image-card-overlay">
+        <button class="btn btn-danger btn-sm" onclick="removeImage(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('imageCount').textContent = `${state.uploadedImages.length} / 20 images`;
+}
+
+// ─── FILE UPLOAD ────────────────────────────
+function handleFileUpload(files) {
+  for (const file of files) {
+    if (state.uploadedFiles.length >= 5) { showToast('Maximum 5 files allowed', 'error'); break; }
+    if (file.size > 20 * 1024 * 1024) { showToast(`${file.name} is over 20MB limit`, 'error'); continue; }
+    state.uploadedFiles.push({ name: file.name, size: file.size, file });
+  }
+  renderFiles();
+}
+
+function removeFile(idx) { state.uploadedFiles.splice(idx, 1); renderFiles(); }
+
+function renderFiles() {
+  const container = document.getElementById('digitalFilesList');
+  const dfCard = document.getElementById('digitalFilesCard');
+  const isDigital = document.getElementById('listingType').value === 'download';
+  dfCard.style.display = isDigital ? '' : 'none';
+  
+  if (state.uploadedFiles.length === 0) { container.innerHTML = ''; }
+  else {
+    container.innerHTML = state.uploadedFiles.map((f, i) => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg-input);border-radius:var(--radius-sm);margin-top:8px;">
+        <span>📄</span>
+        <span style="flex:1;font-size:14px;">${f.name}</span>
+        <span style="font-size:12px;color:var(--text-muted);">${(f.size / 1024 / 1024).toFixed(2)} MB</span>
+        <button class="btn btn-danger btn-sm" onclick="removeFile(${i})">✕</button>
+      </div>
+    `).join('');
+  }
+  document.getElementById('fileCount').textContent = `${state.uploadedFiles.length} / 5 files`;
+}
+
+// ─── TAGS ───────────────────────────────────
+function addTag() {
+  const input = document.getElementById('tagInput');
+  const tag = input.value.trim();
+  if (!tag) return;
+  if (state.tags.length >= 13) { showToast('Maximum 13 tags', 'error'); return; }
+  if (state.tags.includes(tag)) { showToast('Tag already added', 'error'); return; }
+  state.tags.push(tag);
+  input.value = '';
+  renderTags();
+}
+
+function removeTag(idx) { state.tags.splice(idx, 1); renderTags(); }
+
+function renderTags() {
+  document.getElementById('tagList').innerHTML = state.tags.map((t, i) => `
+    <span class="tag">${t}<span class="tag-remove" onclick="removeTag(${i})">×</span></span>
+  `).join('');
+  document.getElementById('tagCount').textContent = `${state.tags.length}/13 tags`;
+}
+
+// ─── AI CONTENT GENERATION ──────────────────
+async function aiGenerate(type) {
+  const provider = getSetting('defaultAIProvider') || 'gemini';
+  const shop = getSetting('shopName') || 'my Etsy shop';
+  let prompt = '';
+
+  if (type === 'title') {
+    prompt = `Generate 3 creative Etsy listing titles (max 140 chars each) for a digital product in a ${shop}. Make them SEO-friendly and compelling. Return ONLY the titles, one per line, no numbering.`;
+  } else if (type === 'description') {
+    const title = document.getElementById('listingTitle').value || 'digital art print';
+    prompt = `Write a compelling Etsy product description for: "${title}". Include details about subject, format, style, file type, dimensions, usage rights, and room suggestions. Make it warm and inviting. Keep it under 500 words.`;
+  } else if (type === 'tags') {
+    const title = document.getElementById('listingTitle').value || 'digital print';
+    prompt = `Generate 13 SEO-friendly Etsy tags for a product like: "${title}". Return ONLY comma-separated tags, no numbering or explanation.`;
+  }
+
+  showToast(`Generating ${type} with ${provider}...`);
+  try {
+    const content = await callAI(provider, prompt);
+    if (type === 'title') {
+      const titles = content.split('\n').filter(t => t.trim().length > 5).slice(0, 3);
+      document.getElementById('listingTitle').value = titles[0] || content.slice(0, 140);
+      updateTitleCount();
+      showToast('Title generated! Pick from these options: \n' + titles.join('\n'));
+    } else if (type === 'description') {
+      document.getElementById('listingDescription').value = content;
+      showToast('Description generated!');
+    } else if (type === 'tags') {
+      const newTags = content.split(/[,|\n]/).map(t => t.trim().replace(/^[\d.\-•\s]+/, '')).filter(t => t.length > 1).slice(0, 13);
+      state.tags = [...new Set([...state.tags, ...newTags])].slice(0, 13);
+      renderTags();
+      showToast(`${newTags.length} tags generated!`);
+    }
+  } catch(e) {
+    showToast('AI generation failed: ' + e.message, 'error');
+  }
+}
+
+async function callAI(provider, prompt) {
+  if (provider === 'gemini') {
+    const key = getSetting('geminiApiKey');
+    const model = getSetting('geminiModel') || 'gemini-pro';
+    if (!key) throw new Error('Gemini API key not configured');
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Gemini error'); }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } else if (provider === 'openai') {
+    const key = getSetting('openaiApiKey');
+    const model = getSetting('openaiModel') || 'gpt-4o';
+    if (!key) throw new Error('OpenAI API key not configured');
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 1000 })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'OpenAI error'); }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '';
+  } else if (provider === 'deepseek') {
+    const key = getSetting('deepseekApiKey');
+    const model = getSetting('deepseekModel') || 'deepseek-chat';
+    if (!key) throw new Error('DeepSeek API key not configured');
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 1000 })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'DeepSeek error'); }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '';
+  }
+  throw new Error('Unknown provider: ' + provider);
+}
+
+// ─── AI IMAGE GENERATION ────────────────────
+async function generateAIImage() {
+  const prompt = document.getElementById('aiImagePrompt').value.trim();
+  if (!prompt) { showToast('Please enter an image prompt', 'error'); return; }
+  const provider = document.getElementById('aiImageProvider').value;
+  const preview = document.getElementById('aiImagePreview');
+  const btn = document.getElementById('btnGenerateImage');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  preview.innerHTML = '<div style="text-align:center;padding:24px;"><span class="spinner"></span> Creating image...</div>';
+
+  try {
+    if (provider === 'gemini') {
+      const key = getSetting('geminiApiKey');
+      if (!key) throw new Error('Gemini API key not configured');
+      const model = 'gemini-2.0-flash-exp-image-generation';
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+        })
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Gemini image error'); }
+      const data = await res.json();
+      let foundImage = false;
+      for (const part of (data.candidates?.[0]?.content?.parts || [])) {
+        if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+          const imgData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          const imgName = `ai-generated-${Date.now()}.png`;
+          state.uploadedImages.push({ name: imgName, data: imgData, file: dataURLtoFile(imgData, imgName) });
+          renderImages();
+          preview.innerHTML = `<div class="image-card" style="max-width:300px;aspect-ratio:1;"><img src="${imgData}" alt="AI Generated"></div>
+            <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="this.previousElementSibling.remove();this.remove();">Add to Listing</button>`;
+          foundImage = true;
+          showToast('AI image generated and added!');
+        }
+      }
+      if (!foundImage) {
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No image returned';
+        preview.innerHTML = `<div style="color:var(--text-muted);padding:16px;">Gemini returned text instead: "${text}"</div>`;
+      }
+    } else if (provider === 'openai') {
+      const key = getSetting('openaiApiKey');
+      if (!key) throw new Error('OpenAI API key not configured');
+      const res = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1024x1024', quality: 'standard' })
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'OpenAI error'); }
+      const data = await res.json();
+      const imgUrl = data.data?.[0]?.url;
+      if (imgUrl) {
+        const imgName = `ai-generated-${Date.now()}.png`;
+        state.uploadedImages.push({ name: imgName, data: imgUrl, file: null, url: imgUrl });
+        renderImages();
+        preview.innerHTML = `<div class="image-card" style="max-width:300px;aspect-ratio:1;"><img src="${imgUrl}" alt="AI Generated"></div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px;">Added to Listing</button>`;
+        showToast('AI image generated and added!');
+      }
+    }
+  } catch(e) {
+    showToast('Image generation failed: ' + e.message, 'error');
+    preview.innerHTML = '';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<span>✨</span> Generate Image';
+}
+
+function dataURLtoFile(dataurl, filename) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, { type: mime });
+}
+
+// ─── TITLE COUNT ────────────────────────────
+function updateTitleCount() {
+  const len = document.getElementById('listingTitle').value.length;
+  document.getElementById('titleCount').textContent = `${len}/140`;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('listingTitle').addEventListener('input', updateTitleCount);
+  document.getElementById('listingType').addEventListener('change', () => {
+    renderFiles();
+    const isPhysical = document.getElementById('listingType').value === 'physical';
+    document.getElementById('physicalFieldsCard').style.display = isPhysical ? '' : 'none';
+    if (isPhysical) { fetchShippingProfiles(); fetchReadinessStates(); }
+  });
+});
+
+// ─── SAVE DRAFT ─────────────────────────────
+function saveDraft() {
+  const draft = {
+    title: document.getElementById('listingTitle').value,
+    description: document.getElementById('listingDescription').value,
+    category: document.getElementById('listingCategory').value,
+    type: document.getElementById('listingType').value,
+    year: document.getElementById('listingYear').value,
+    price: document.getElementById('listingPrice').value,
+    quantity: document.getElementById('listingQuantity').value,
+    sku: document.getElementById('listingSKU').value,
+    tags: state.tags,
+    primaryColor: document.getElementById('primaryColor').value,
+    materials: document.getElementById('materials').value,
+    dimWidth: document.getElementById('dimWidth').value,
+    dimHeight: document.getElementById('dimHeight').value,
+    whoMade: document.getElementById('whoMade').value,
+    whatIs: document.getElementById('whatIs').value,
+    creationMethod: document.getElementById('creationMethod').value,
+    shopSection: document.getElementById('shopSection').value,
+    renewalOption: document.getElementById('renewalOption').value,
+    featureListing: document.getElementById('featureListing').checked,
+    etsyAds: document.getElementById('etsyAds').checked,
+    digitalNote: document.getElementById('digitalNote').value,
+    imageCount: state.uploadedImages.length,
+    fileCount: state.uploadedFiles.length,
+    savedAt: new Date().toISOString()
+  };
+  state.draft = draft;
+  localStorage.setItem('etsyStudio_draft', JSON.stringify(draft));
+  
+  // Also save as a draft listing
+  const existing = state.listings.findIndex(l => l.id === 'draft-current');
+  const draftListing = { id: 'draft-current', ...draft, status: 'draft', createdAt: new Date().toISOString() };
+  if (existing >= 0) state.listings[existing] = draftListing;
+  else state.listings.unshift(draftListing);
+  localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+
+  showToast('Draft saved!');
+}
+
+function restoreDraft() {
+  const draft = state.draft;
+  if (!draft || !draft.title) return;
+  document.getElementById('listingTitle').value = draft.title || '';
+  document.getElementById('listingDescription').value = draft.description || '';
+  document.getElementById('listingCategory').value = draft.category || '';
+  document.getElementById('listingType').value = draft.type || 'download';
+  document.getElementById('listingYear').value = draft.year || '';
+  document.getElementById('listingPrice').value = draft.price || '';
+  document.getElementById('listingQuantity').value = draft.quantity || '999';
+  document.getElementById('listingSKU').value = draft.sku || '';
+  document.getElementById('primaryColor').value = draft.primaryColor || '';
+  document.getElementById('materials').value = draft.materials || '';
+  document.getElementById('dimWidth').value = draft.dimWidth || '';
+  document.getElementById('dimHeight').value = draft.dimHeight || '';
+  document.getElementById('whoMade').value = draft.whoMade || 'i_did';
+  document.getElementById('whatIs').value = draft.whatIs || 'finished_product';
+  document.getElementById('creationMethod').value = draft.creationMethod || 'created_by_me';
+  document.getElementById('shopSection').value = draft.shopSection || '';
+  document.getElementById('renewalOption').value = draft.renewalOption || 'auto';
+  document.getElementById('featureListing').checked = draft.featureListing || false;
+  document.getElementById('etsyAds').checked = draft.etsyAds || false;
+  document.getElementById('digitalNote').value = draft.digitalNote || '';
+  if (draft.tags) { state.tags = draft.tags; renderTags(); }
+  updateTitleCount();
+  renderFiles();
+}
+
+// ─── PUBLISH TO ETSY ────────────────────────
+async function publishListing() {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+
+  if (!xApiKey || !token || !shopId) {
+    showToast('Please configure Etsy API settings (Keystring + Shared Secret + Token + Shop ID)', 'error');
+    navigate('settings');
+    return;
+  }
+
+  const title = document.getElementById('listingTitle').value.trim();
+  if (!title) { showToast('Please enter a title', 'error'); return; }
+  if (state.uploadedImages.length === 0) { showToast('Please add at least one image', 'error'); return; }
+
+  const listingType = document.getElementById('listingType').value;
+  const isPhysical = listingType === 'physical';
+
+  if (listingType === 'download' && state.uploadedFiles.length === 0) {
+    showToast('Digital listings require at least one file', 'error');
+    return;
+  }
+
+  if (isPhysical) {
+    const shipId = document.getElementById('shippingProfileId').value;
+    const readinessId = document.getElementById('readinessStateId').value;
+    if (!shipId) { showToast('Physical listings require a shipping profile. Create one in Shipping & Processing.', 'error'); return; }
+    if (!readinessId) { showToast('Physical listings require a readiness state. Create one in Shipping & Processing.', 'error'); return; }
+  }
+
+  const authHeaders = { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` };
+
+  const btn = document.getElementById('btnPublish');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Publishing...';
+
+  const progressDiv = document.getElementById('publishProgress');
+  progressDiv.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+      <div style="font-weight:600;margin-bottom:12px;">Publishing to Etsy...</div>
+      <div id="progressSteps"></div>
+    </div>
+  `;
+  const steps = document.getElementById('progressSteps');
+  function addStep(msg, status = 'pending') {
+    const icons = { pending: '⏳', success: '✅', error: '❌' };
+    steps.innerHTML += `<div style="font-size:13px;margin:6px 0;color:var(--text-${status==='error'?'muted':status==='success'?'primary':'secondary'});">${icons[status]} ${msg}</div>`;
+  }
+
+  try {
+    // Step 1: Create draft listing
+    addStep('Creating draft listing on Etsy...');
+    const listingPayload = {
+      type: isPhysical ? 'physical' : 'download',
+      title: title,
+      description: document.getElementById('listingDescription').value,
+      price: parseFloat(document.getElementById('listingPrice').value) || 0,
+      quantity: parseInt(document.getElementById('listingQuantity').value) || 999,
+      who_made: document.getElementById('whoMade').value,
+      when_made: document.getElementById('listingYear').value || '2020_2026',
+      is_supply: document.getElementById('whatIs').value === 'supply_or_tool',
+      tags: state.tags,
+      taxonomy_id: 1
+    };
+
+    if (isPhysical) {
+      listingPayload.shipping_profile_id = parseInt(document.getElementById('shippingProfileId').value);
+    }
+
+    const createRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(listingPayload)
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      let errMsg = errText;
+      try { errMsg = JSON.parse(errText).error || errText; } catch(e) {}
+      throw new Error(errMsg || 'Failed to create listing');
+    }
+
+    const listingData = await createRes.json();
+    const listingId = listingData.listing_id;
+    addStep(`Listing created (ID: ${listingId})`, 'success');
+
+    // Step 2: Upload images
+    addStep('Uploading images...');
+    for (let i = 0; i < state.uploadedImages.length; i++) {
+      const img = state.uploadedImages[i];
+      const formData = new FormData();
+      const blob = img.file || await (await fetch(img.data)).blob();
+      const ext = img.name.split('.').pop() || 'jpg';
+      formData.append('image', blob, `listing_image_${i + 1}.${ext}`);
+      formData.append('rank', i + 1);
+
+      const imgRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData
+      });
+
+      if (imgRes.ok) addStep(`Image ${i + 1}/${state.uploadedImages.length} uploaded`, 'success');
+      else addStep(`Image ${i + 1} failed`, 'error');
+    }
+
+    // Step 3: Upload digital files (digital items only)
+    if (listingType === 'download' && state.uploadedFiles.length > 0) {
+      addStep('Uploading digital files...');
+      for (let i = 0; i < state.uploadedFiles.length; i++) {
+        const file = state.uploadedFiles[i];
+        const formData = new FormData();
+        formData.append('file', file.file, file.name.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 70));
+        formData.append('rank', i + 1);
+
+        const fileRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/files`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: formData
+        });
+
+        if (fileRes.ok) addStep(`File ${i + 1}/${state.uploadedFiles.length} uploaded`, 'success');
+        else addStep(`File ${i + 1} failed`, 'error');
+      }
+    }
+
+    // Step 4: Set state to active (PATCH updateListing state=active)
+    addStep('Activating listing...');
+    const patchBody = new URLSearchParams();
+    patchBody.append('state', 'active');
+    const patchRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`, {
+      method: 'PATCH',
+      headers: { ...authHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: patchBody.toString()
+    });
+
+    if (patchRes.ok) addStep('Listing activated (published)', 'success');
+    else addStep('Activation step returned: ' + patchRes.status, 'error');
+
+    // Save to local listings
+    const newListing = {
+      id: listingId,
+      etsyId: listingId,
+      title: title,
+      price: parseFloat(document.getElementById('listingPrice').value) || 0,
+      status: 'published',
+      state: 'active',
+      publishedAt: new Date().toISOString(),
+      imageUrl: state.uploadedImages[0]?.data || ''
+    };
+    state.listings.unshift(newListing);
+    localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+    localStorage.removeItem('etsyStudio_draft');
+
+    addStep('✓ Listing published successfully!', 'success');
+    showToast('Listing published to Etsy! 🎉');
+    setTimeout(() => navigate('dashboard'), 2000);
+  } catch(e) {
+    addStep('Error: ' + e.message, 'error');
+    showToast('Publishing failed: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '🚀 Publish to Etsy';
+}
+
+// ─── ETSY LISTING STATE MANAGEMENT ─────────
+async function etsyUpdateState(listingId, newState) {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
+
+  const body = new URLSearchParams();
+  body.append('state', newState);
+
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`, {
+      method: 'PATCH',
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    if (res.ok) {
+      const listing = state.listings.find(l => l.etsyId === listingId || l.id === listingId);
+      if (listing) {
+        listing.state = newState;
+        listing.status = newState === 'active' ? 'published' : newState;
+        localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+      }
+      showToast(`Listing ${newState === 'active' ? 'activated' : newState === 'inactive' ? 'deactivated' : newState}`);
+      loadDashboard();
+    } else {
+      const err = await res.text();
+      showToast('State update failed: ' + res.status, 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function etsyDeleteListing(listingId) {
+  if (!confirm('Delete this listing permanently from Etsy? This cannot be undone.')) return;
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
+
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`, {
+      method: 'DELETE',
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      deleteListing(listingId);
+      showToast('Listing deleted from Etsy');
+    } else {
+      showToast('Delete failed: ' + res.status, 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ─── SHIPPING PROFILES ─────────────────────
+async function fetchShippingProfiles() {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) return;
+
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/shipping-profiles`, {
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const sel = document.getElementById('shippingProfileId');
+      sel.innerHTML = '<option value="">Select a shipping profile...</option>' +
+        (data.results || []).map(p => `<option value="${p.shipping_profile_id}">${p.title} (${p.primary_cost / 100} USD)</option>`).join('');
+    }
+  } catch(e) {}
+}
+
+async function createShippingProfile() {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
+
+  const title = prompt('Shipping profile title (e.g., "Free US Shipping"):');
+  if (!title) return;
+  const origin = document.getElementById('originCountryIso').value;
+  const destRegion = document.getElementById('destinationRegion').value;
+  const primary = document.getElementById('primaryCost').value || '0';
+  const secondary = document.getElementById('secondaryCost').value || '0';
+
+  const body = new URLSearchParams();
+  body.append('title', title);
+  body.append('origin_country_iso', origin);
+  body.append('primary_cost', Math.round(parseFloat(primary) * 100).toString());
+  body.append('secondary_cost', Math.round(parseFloat(secondary) * 100).toString());
+  body.append('min_processing_time', '1');
+  body.append('max_processing_time', '3');
+  body.append('destination_region', destRegion);
+
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/shipping-profiles`, {
+      method: 'POST',
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      showToast('Shipping profile created!');
+      fetchShippingProfiles();
+      document.getElementById('shippingProfileId').value = data.shipping_profile_id;
+    } else {
+      const err = await res.json();
+      showToast('Failed: ' + (err.error || res.status), 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function showCreateShippingProfile() {
+  const title = prompt('Shipping profile title (e.g., "Free US Shipping"):');
+  if (title) createShippingProfile();
+}
+
+// ─── READINESS STATES ──────────────────────
+async function fetchReadinessStates() {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) return;
+
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/readiness-state-definitions`, {
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const sel = document.getElementById('readinessStateId');
+      sel.innerHTML = '<option value="">Select readiness state...</option>' +
+        (data.results || []).map(r => {
+          const state = r.readiness_state === 'ready_to_ship' ? '🚀 Ready to Ship' : '🔧 Made to Order';
+          return `<option value="${r.readiness_state_id}">${state} (${r.min_processing_time}-${r.max_processing_time} ${r.processing_time_unit || 'days'})</option>`;
+        }).join('');
+    }
+  } catch(e) {}
+}
+
+async function createReadinessState() {
+  const xApiKey = getXApiKey();
+  const token = getSetting('etsyAccessToken');
+  const shopId = getSetting('etsyShopId');
+  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
+
+  const state = prompt('Readiness state ("ready_to_ship" or "made_to_order"):', 'ready_to_ship');
+  if (!state) return;
+  const minDays = prompt('Min processing days:', '1');
+  const maxDays = prompt('Max processing days:', '3');
+
+  const body = new URLSearchParams();
+  body.append('readiness_state', state);
+  body.append('min_processing_time', minDays || '1');
+  body.append('max_processing_time', maxDays || '3');
+  body.append('processing_time_unit', 'days');
+
+  try {
+    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/readiness-state-definitions`, {
+      method: 'POST',
+      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      showToast('Readiness state created!');
+      fetchReadinessStates();
+      document.getElementById('readinessStateId').value = data.readiness_state_id;
+    } else {
+      const err = await res.json();
+      showToast('Failed: ' + (err.error || res.status), 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function showCreateReadinessState() { createReadinessState(); }
+
+// ─── DASHBOARD ──────────────────────────────
+function switchDashboardTab(el, tab) {
+  document.querySelectorAll('#page-dashboard .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  state.dashboardTab = tab;
+  loadDashboard();
+}
+
+function loadDashboard() {
+  const container = document.getElementById('listings-container');
+  const listings = state.listings.filter(l => {
+    if (state.dashboardTab === 'drafts') return l.status === 'draft';
+    if (state.dashboardTab === 'published') return l.status === 'published' && (!l.state || l.state === 'active');
+    if (state.dashboardTab === 'deactivated') return l.state === 'inactive' || l.state === 'deactivated';
+    return true;
+  });
+
+  if (listings.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📦</div>
+        <div class="empty-state-title">No listings yet</div>
+        <p>Create your first listing to get started</p>
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="navigate('create')">+ Create Listing</button>
+      </div>
+    `;
+    return;
+  }
+
+  function stateBadge(s) {
+    if (!s || s === 'published') return `<span style="color:var(--green);font-size:12px;padding:2px 8px;border-radius:10px;background:#064e3b20;">✅ Active</span>`;
+    if (s === 'draft') return `<span style="color:var(--text-muted);font-size:12px;padding:2px 8px;border-radius:10px;background:var(--bg-input);">📝 Draft</span>`;
+    if (s === 'inactive' || s === 'deactivated') return `<span style="color:var(--amber);font-size:12px;padding:2px 8px;border-radius:10px;background:#78350f20;">⚠ Deactivated</span>`;
+    if (s === 'sold_out') return `<span style="color:#f87171;font-size:12px;padding:2px 8px;border-radius:10px;background:#7f1d1d20;">Sold Out</span>`;
+    if (s === 'expired') return `<span style="color:var(--text-muted);font-size:12px;padding:2px 8px;border-radius:10px;background:var(--bg-input);">⏰ Expired</span>`;
+    return '';
+  }
+
+  function actionButtons(l) {
+    if (l.status === 'draft') return `<button class="btn btn-primary btn-sm" onclick="navigate('create')">Edit</button>`;
+    const state = l.state || 'active';
+    const id = l.etsyId || l.id;
+    let btns = '';
+    if (state === 'active') {
+      btns += `<button class="btn btn-secondary btn-sm" onclick="etsyUpdateState('${id}','inactive')">Deactivate</button> `;
+    } else if (state === 'inactive' || state === 'deactivated' || state === 'expired') {
+      btns += `<button class="btn btn-primary btn-sm" onclick="etsyUpdateState('${id}','active')">Activate</button> `;
+    }
+    btns += `<button class="btn btn-danger btn-sm" onclick="etsyDeleteListing('${id}')">🗑️</button>`;
+    return btns;
+  }
+
+  container.innerHTML = listings.map(l => `
+    <div class="listing-card">
+      <img class="listing-card-img" src="${l.imageUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22><rect fill=%22%2322223a%22 width=%2280%22 height=%2280%22/><text fill=%22%236a6a88%22 x=%2240%22 y=%2245%22 text-anchor=%22middle%22 font-size=%2212%22>No Img</text></svg>'}" alt="${l.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22><rect fill=%22%2322223a%22 width=%2280%22 height=%2280%22/><text fill=%22%236a6a88%22 x=%2240%22 y=%2245%22 text-anchor=%22middle%22 font-size=%2212%22>No Img</text></svg>'">
+      <div class="listing-card-info">
+        <div class="listing-card-title">${l.title || 'Untitled Draft'}</div>
+        <div class="listing-card-meta">
+          ${stateBadge(l.state || l.status)} 
+          ${l.etsyId ? `· ID: ${l.etsyId}` : ''} 
+          · ${l.createdAt ? new Date(l.createdAt).toLocaleDateString() : l.publishedAt ? new Date(l.publishedAt).toLocaleDateString() : ''}
+        </div>
+      </div>
+      <div class="listing-card-price">${l.price ? '$' + parseFloat(l.price).toFixed(2) : '—'}</div>
+      ${actionButtons(l)}
+    </div>
+  `).join('');
+}
+
+function deleteListing(id) {
+  state.listings = state.listings.filter(l => l.id !== id);
+  localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+  loadDashboard();
+  showToast('Listing removed');
+}
+
+// ─── FIELD DEFAULTS SYSTEM ──────────────────
+const DEFAULTABLE_FIELDS = {
+  listingCategory: 'Category', listingType: 'Item Type', listingYear: 'Year Made',
+  listingPrice: 'Price', listingQuantity: 'Quantity', listingSKU: 'SKU',
+  primaryColor: 'Primary Color', materials: 'Materials', dimWidth: 'Width', dimHeight: 'Height',
+  whoMade: 'Who Made', whatIs: 'What Is It', creationMethod: 'Creation Method',
+  shopSection: 'Shop Section', renewalOption: 'Renewal',
+  digitalNote: 'Buyer Note', originCountryIso: 'Origin Country', destinationRegion: 'Destination',
+  primaryCost: 'Primary Shipping', secondaryCost: 'Secondary Shipping'
+};
+
+function getFieldDefaults() {
+  return JSON.parse(localStorage.getItem('etsyStudio_fieldDefaults') || '{}');
+}
+
+function setFieldDefaults(d) {
+  localStorage.setItem('etsyStudio_fieldDefaults', JSON.stringify(d));
+}
+
+function toggleFieldDefault(fieldId) {
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  const defaults = getFieldDefaults();
+  if (defaults[fieldId]) {
+    delete defaults[fieldId];
+    showToast(`"${DEFAULTABLE_FIELDS[fieldId] || fieldId}" unpinned — will reset each time`);
+  } else {
+    const val = el.type === 'checkbox' ? el.checked : el.value;
+    if (val === '' || val === null || val === undefined) {
+      showToast('Set a value first before pinning', 'error');
+      return;
+    }
+    defaults[fieldId] = val;
+    showToast(`"${DEFAULTABLE_FIELDS[fieldId] || fieldId}" pinned — auto-filled on new listings`);
+  }
+  setFieldDefaults(defaults);
+  injectPinButtons();
+  renderDefaultsCard();
+}
+
+function saveFieldDefaultOnChange(fieldId) {
+  const defaults = getFieldDefaults();
+  if (!(fieldId in defaults)) return;
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  defaults[fieldId] = el.type === 'checkbox' ? el.checked : el.value;
+  setFieldDefaults(defaults);
+  renderDefaultsCard();
+}
+
+function applyDefaults() {
+  const defaults = getFieldDefaults();
+  Object.keys(defaults).forEach(fieldId => {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = defaults[fieldId];
+    else el.value = defaults[fieldId];
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const defTags = defaults['_tags'];
+  if (defTags && Array.isArray(defTags)) {
+    state.tags = defTags;
+    renderTags();
+  }
+  updateTitleCount();
+}
+
+function injectPinButtons() {
+  const defaults = getFieldDefaults();
+  // Remove old pin buttons
+  document.querySelectorAll('.pin-toggle').forEach(b => b.remove());
+  document.querySelectorAll('.field-header').forEach(h => {
+    const label = h.querySelector('.form-label');
+    if (label) h.replaceWith(label);
+  });
+
+  document.querySelectorAll('#page-create .form-label').forEach(label => {
+    let fieldEl = label.nextElementSibling;
+    // Handle AI generate rows
+    if (!fieldEl || (!fieldEl.matches('input,select,textarea') && !fieldEl.querySelector('input,select,textarea'))) {
+      const wrapper = label.parentElement?.querySelector?.('.ai-generate-row');
+      if (wrapper) fieldEl = wrapper.querySelector('input,select,textarea');
+    }
+    if (!fieldEl) {
+      const wrapped = label.parentElement?.querySelector?.('input,select,textarea');
+      if (wrapped) fieldEl = wrapped;
+    }
+    if (!fieldEl) return;
+
+    const fieldId = fieldEl.id;
+    if (!fieldId || !DEFAULTABLE_FIELDS[fieldId]) return;
+
+    const pin = document.createElement('button');
+    pin.className = 'pin-toggle' + (defaults[fieldId] !== undefined ? ' pinned' : '');
+    pin.title = defaults[fieldId] !== undefined
+      ? `Pinned — "${DEFAULTABLE_FIELDS[fieldId]}" auto-fills. Click to unpin.`
+      : `Pin "${DEFAULTABLE_FIELDS[fieldId]}" — value persists across new listings.`;
+    pin.innerHTML = '📌';
+    pin.onclick = (e) => { e.preventDefault(); toggleFieldDefault(fieldId); };
+
+    const header = document.createElement('div');
+    header.className = 'field-header';
+    label.parentNode.insertBefore(header, label);
+    header.appendChild(label);
+    header.appendChild(pin);
+  });
+}
+
+function clearFieldDefault(fieldId) {
+  const defaults = getFieldDefaults();
+  delete defaults[fieldId];
+  setFieldDefaults(defaults);
+  injectPinButtons();
+  renderDefaultsCard();
+  showToast(`"${DEFAULTABLE_FIELDS[fieldId] || fieldId}" unpinned`);
+}
+
+function clearAllDefaults() {
+  if (!confirm('Remove all field defaults? Fields will no longer auto-fill.')) return;
+  localStorage.removeItem('etsyStudio_fieldDefaults');
+  injectPinButtons();
+  renderDefaultsCard();
+  showToast('All field defaults cleared');
+}
+
+function renderDefaultsCard() {
+  const container = document.getElementById('defaults-container');
+  if (!container) return;
+  const defaults = getFieldDefaults();
+  const entries = Object.entries(defaults).filter(([k]) => !k.startsWith('_'));
+  if (entries.length === 0) {
+    container.innerHTML = '<div class="defaults-empty">No defaults saved yet</div>';
+    return;
+  }
+  container.innerHTML = entries.map(([key, val]) => `
+    <div class="defaults-card-row">
+      <span class="key">${DEFAULTABLE_FIELDS[key] || key}</span>
+      <span class="val">${val === true ? '✓ Yes' : val === false ? '✗ No' : String(val).slice(0, 60)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="clearFieldDefault('${key}')" title="Unpin">✕</button>
+    </div>
+  `).join('');
+}
+
+// Hook navigate to apply defaults
+const _origNavigate = navigate;
+navigate = function(page) {
+  _origNavigate(page);
+  if (page === 'create') {
+    setTimeout(() => {
+      injectPinButtons();
+      applyDefaults();
+    }, 100);
+  }
+  if (page === 'dashboard') renderDefaultsCard();
+};
+
+// ─── DRAG & DROP ────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+
+  // Inject pin buttons after page load
+  setTimeout(injectPinButtons, 200);
+
+  // Auto-save pinned field values on change
+  document.getElementById('page-create').addEventListener('change', (e) => {
+    if (e.target.id && DEFAULTABLE_FIELDS[e.target.id]) {
+      saveFieldDefaultOnChange(e.target.id);
+    }
+  });
+  document.getElementById('page-create').addEventListener('input', (e) => {
+    if (e.target.id && DEFAULTABLE_FIELDS[e.target.id]) {
+      saveFieldDefaultOnChange(e.target.id);
+    }
+  });
+
+  const dropZone = document.getElementById('imageUploadZone');
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); });
+  });
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, () => dropZone.classList.add('drag-over'));
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, () => dropZone.classList.remove('drag-over'));
+  });
+  dropZone.addEventListener('drop', e => {
+    handleImageUpload(e.dataTransfer.files);
+  });
+
+  // Initial load
+  loadDashboard();
+});
+</script>
+</body>
+</html>
