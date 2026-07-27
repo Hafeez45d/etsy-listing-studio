@@ -831,27 +831,37 @@ body {
           <span class="api-status" id="etsyApiStatus">none</span>
         </div>
         <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Etsy API Key (Keystring)</label>
-            <input class="form-input" id="etsyApiKey" type="password" placeholder="Your Etsy app API keystring" onchange="saveSettings()">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Shared Secret</label>
-            <input class="form-input" id="etsySharedSecret" type="password" placeholder="Your Etsy app shared secret" onchange="saveSettings()">
+          <div class="form-group full">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="connectEtsy()" id="btnConnectEtsy" style="background:var(--green);">
+                🔗 Connect with Etsy
+              </button>
+              <button class="btn btn-secondary" onclick="testEtsyConnection()" id="btnTestEtsy">Test Connection</button>
+              <button class="btn btn-danger btn-sm" onclick="disconnectEtsy()" id="btnDisconnectEtsy" style="display:none;">Disconnect</button>
+              <span id="etsyConnectStatus" style="font-size:13px;color:var(--text-muted);"></span>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">OAuth Access Token</label>
-            <input class="form-input" id="etsyAccessToken" type="password" placeholder="Bearer token from OAuth (listings_r listings_w)" onchange="saveSettings()">
+            <input class="form-input" id="etsyAccessToken" type="password" placeholder="Populated automatically via OAuth" readonly onchange="saveSettings()">
           </div>
           <div class="form-group">
-            <label class="form-label">Shop ID</label>
-            <input class="form-input" id="etsyShopId" placeholder="Your Etsy shop ID" onchange="saveSettings()">
+            <label class="form-label">Refresh Token</label>
+            <input class="form-input" id="etsyRefreshToken" type="password" placeholder="Populated automatically via OAuth" readonly onchange="saveSettings()">
           </div>
-          <div class="form-group" style="justify-content:flex-end;">
-            <button class="btn btn-primary btn-sm" onclick="testEtsyConnection()">Test Connection</button>
+          <input type="hidden" id="etsyApiKey"> <!-- Stored automatically; keystring is the public client ID -->
+          <div class="form-group">
+            <label class="form-label">Shop ID</label>
+            <input class="form-input" id="etsyShopId" placeholder="Populated automatically via OAuth" readonly onchange="saveSettings()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Shop Name</label>
+            <input class="form-input" id="etsyShopName" placeholder="Populated automatically via OAuth" readonly onchange="saveSettings()">
           </div>
         </div>
-        <div class="form-hint" style="margin-top:8px;">x-api-key header format: keystring:shared_secret</div>
+        <div class="form-hint" style="margin-top:8px;">
+          Click "Connect with Etsy" to authorize via OAuth. Your Shared Secret is stored securely on the backend — never in the browser.
+        </div>
       </div>
 
       <div class="settings-section">
@@ -949,6 +959,11 @@ body {
 </div>
 
 <script>
+// ─── CONFIG ──────────────────────────────────
+const BACKEND_URL = 'https://etsy-listing-studio-backend.onrender.com';
+// For local dev, uncomment below and comment the above:
+// const BACKEND_URL = 'http://localhost:3000';
+
 // ─── STATE ──────────────────────────────────
 const state = {
   listings: JSON.parse(localStorage.getItem('etsyStudio_listings') || '[]'),
@@ -961,8 +976,9 @@ const state = {
 
 // ─── SETTINGS MANAGEMENT ────────────────────
 function loadSettings() {
-  const keys = ['etsyApiKey','etsySharedSecret','etsyAccessToken','etsyShopId','geminiApiKey','geminiModel',
-    'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel','defaultAIProvider','shopName'];
+  const keys = ['etsyApiKey', 'etsyAccessToken','etsyRefreshToken','etsyShopId','etsyShopName',
+    'geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
+    'defaultAIProvider','shopName'];
   keys.forEach(k => {
     const el = document.getElementById(k);
     if (el) {
@@ -976,8 +992,9 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  const keys = ['etsyApiKey','etsySharedSecret','etsyAccessToken','etsyShopId','geminiApiKey','geminiModel',
-    'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel','defaultAIProvider','shopName'];
+  const keys = ['etsyApiKey', 'etsyAccessToken','etsyRefreshToken','etsyShopId','etsyShopName',
+    'geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
+    'defaultAIProvider','shopName'];
   keys.forEach(k => {
     const el = document.getElementById(k);
     if (el) {
@@ -990,11 +1007,14 @@ function saveSettings() {
   updateEtsyNavStatus();
 }
 
-function getXApiKey() {
-  const key = getSetting('etsyApiKey');
-  const secret = getSetting('etsySharedSecret');
-  if (key && secret) return key + ':' + secret;
-  return key;
+// Access token is now stored in local settings (not in backend)
+// The backend holds the Keystring + Shared Secret; frontend stores the bearer token
+function getEtsyAccessToken() {
+  return getSetting('etsyAccessToken');
+}
+
+function getEtsyRefreshToken() {
+  return getSetting('etsyRefreshToken');
 }
 
 function getSetting(k) {
@@ -1005,6 +1025,166 @@ function getSetting(k) {
 
 function btoaSafe(s) { try { return btoa(unescape(encodeURIComponent(s))); } catch(e) { return ''; } }
 function atobSafe(s) { try { return decodeURIComponent(escape(atob(s))); } catch(e) { return ''; } }
+
+// ─── ETSY OAUTH FLOW ─────────────────────────
+async function connectEtsy() {
+  const btn = document.getElementById('btnConnectEtsy');
+  const status = document.getElementById('etsyConnectStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Preparing...';
+  status.textContent = '';
+
+  try {
+    // Save the current page so we can come back to it
+    localStorage.setItem('etsyStudio_oauthReturnPage', 'settings');
+
+    const res = await fetch(`${BACKEND_URL}/auth/url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to get auth URL');
+    }
+
+    const data = await res.json();
+    console.log('[OAuth] Redirecting to Etsy...');
+    status.textContent = 'Redirecting to Etsy...';
+    window.location.href = data.url;
+  } catch (e) {
+    showToast('Connection failed: ' + e.message, 'error');
+    status.textContent = 'Failed: ' + e.message;
+    btn.disabled = false;
+    btn.innerHTML = '🔗 Connect with Etsy';
+  }
+}
+
+// Handle the OAuth callback when redirected back from Etsy
+async function handleOAuthCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+
+  if (!code || !state) return false;
+
+  // Clean the URL (remove query params)
+  if (window.history && window.history.replaceState) {
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+  showToast('Completing Etsy authorization...');
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, state }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Token exchange failed');
+    }
+
+    const data = await res.json();
+
+    // Store tokens + API key
+    if (data.api_key) {
+      document.getElementById('etsyApiKey').value = data.api_key;
+    }
+    document.getElementById('etsyAccessToken').value = data.access_token;
+    if (data.refresh_token) {
+      document.getElementById('etsyRefreshToken').value = data.refresh_token;
+    }
+    saveSettings();
+
+    // Store shop info
+    if (data.shop) {
+      document.getElementById('etsyShopId').value = data.shop.shop_id;
+      document.getElementById('etsyShopName').value = data.shop.shop_name || data.shop.title || '';
+      saveSettings();
+    }
+
+    updateAllApiStatuses();
+    updateEtsyNavStatus();
+    updateConnectUI();
+
+    const shopName = data.shop ? data.shop.shop_name : 'your shop';
+    showToast(`✓ Connected to Etsy: ${shopName}`);
+
+    // Navigate back to the page the user was on
+    const returnPage = localStorage.getItem('etsyStudio_oauthReturnPage') || 'settings';
+    localStorage.removeItem('etsyStudio_oauthReturnPage');
+    navigate(returnPage);
+
+    return true;
+  } catch (e) {
+    showToast('Authorization failed: ' + e.message, 'error');
+    updateAllApiStatuses();
+    updateEtsyNavStatus();
+    updateConnectUI();
+    return false;
+  }
+}
+
+async function disconnectEtsy() {
+  if (!confirm('Disconnect from Etsy? You will need to re-authorize to reconnect.')) return;
+
+  document.getElementById('etsyAccessToken').value = '';
+  document.getElementById('etsyRefreshToken').value = '';
+  document.getElementById('etsyApiKey').value = '';
+  // Keep shop ID/name for reference, or clear them
+  document.getElementById('etsyShopId').value = '';
+  document.getElementById('etsyShopName').value = '';
+  saveSettings();
+  updateAllApiStatuses();
+  updateEtsyNavStatus();
+  updateConnectUI();
+  showToast('Disconnected from Etsy');
+}
+
+// Refresh access token using refresh_token
+async function refreshAccessToken() {
+  const refreshToken = getEtsyRefreshToken();
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!res.ok) {
+      console.error('[Auth] Token refresh failed:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    if (data.api_key) {
+      document.getElementById('etsyApiKey').value = data.api_key;
+    }
+    document.getElementById('etsyAccessToken').value = data.access_token;
+    if (data.refresh_token) {
+      document.getElementById('etsyRefreshToken').value = data.refresh_token;
+    }
+    saveSettings();
+    console.log('[Auth] Token refreshed successfully');
+    return data.access_token;
+  } catch (e) {
+    console.error('[Auth] Token refresh error:', e.message);
+    return null;
+  }
+}
+
+function updateConnectUI() {
+  const connected = !!(getEtsyAccessToken() && getSetting('etsyShopId'));
+  document.getElementById('btnConnectEtsy').style.display = connected ? 'none' : '';
+  document.getElementById('btnDisconnectEtsy').style.display = connected ? '' : 'none';
+  document.getElementById('btnTestEtsy').style.display = connected ? '' : '';
+}
 
 // ─── NAVIGATION ─────────────────────────────
 function navigate(page) {
@@ -1031,12 +1211,13 @@ function showToast(msg, type = 'success') {
 
 // ─── API STATUS ─────────────────────────────
 function updateAllApiStatuses() {
-  const etsyReady = !!(getSetting('etsyApiKey') && getSetting('etsySharedSecret') && getSetting('etsyAccessToken') && getSetting('etsyShopId'));
+  const etsyReady = !!(getEtsyAccessToken() && getSetting('etsyShopId'));
   updateApiStatus('etsy', etsyReady);
   updateApiStatus('gemini', !!getSetting('geminiApiKey'));
   updateApiStatus('openai', !!getSetting('openaiApiKey'));
   updateApiStatus('deepseek', !!getSetting('deepseekApiKey'));
   updateEtsyNavStatus();
+  updateConnectUI();
 }
 
 function updateApiStatus(provider, configured) {
@@ -1047,7 +1228,7 @@ function updateApiStatus(provider, configured) {
 }
 
 function updateEtsyNavStatus() {
-  const connected = !!(getSetting('etsyApiKey') && getSetting('etsySharedSecret') && getSetting('etsyAccessToken') && getSetting('etsyShopId'));
+  const connected = !!(getEtsyAccessToken() && getSetting('etsyShopId'));
   const el = document.getElementById('etsyStatus');
   const text = document.getElementById('etsyStatusText');
   el.className = 'etsy-status ' + (connected ? 'connected' : 'disconnected');
@@ -1056,27 +1237,35 @@ function updateEtsyNavStatus() {
 
 // ─── TEST CONNECTIONS ───────────────────────
 async function testEtsyConnection() {
-  const xApiKey = getXApiKey();
-  const token = getSetting('etsyAccessToken');
+  const token = getEtsyAccessToken();
   const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) {
-    showToast('Please fill in all Etsy API fields (Keystring, Shared Secret, Token, Shop ID)', 'error');
+  if (!token || !shopId) {
+    showToast('Please connect to Etsy first using the "Connect with Etsy" button', 'error');
     return;
   }
   showToast('Testing Etsy connection...');
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}`, {
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
+    const res = await fetch(`${BACKEND_URL}/shop/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: token }),
     });
     if (res.ok) {
       const data = await res.json();
-      showToast(`✓ Connected to Etsy shop: ${data.shop_name || shopId}`);
+      if (data.shop) {
+        showToast(`✓ Connected to Etsy shop: ${data.shop.shop_name || shopId}`);
+        // Update shop info if it changed
+        document.getElementById('etsyShopName').value = data.shop.shop_name || '';
+        saveSettings();
+      } else {
+        showToast('Token is valid but no shop found. Create a shop on Etsy first.', 'error');
+      }
     } else {
-      const err = await res.text();
-      showToast('Etsy connection failed: ' + (JSON.parse(err)?.error || res.status), 'error');
+      const err = await res.json();
+      showToast('Etsy connection failed: ' + (err.error || res.status), 'error');
     }
   } catch(e) {
-    showToast('Etsy connection error: ' + e.message, 'error');
+    showToast('Connection error: ' + e.message, 'error');
   }
 }
 
@@ -1452,12 +1641,12 @@ function restoreDraft() {
 
 // ─── PUBLISH TO ETSY ────────────────────────
 async function publishListing() {
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
 
   if (!xApiKey || !token || !shopId) {
-    showToast('Please configure Etsy API settings (Keystring + Shared Secret + Token + Shop ID)', 'error');
+    showToast('Please connect to Etsy first using "Connect with Etsy" in Settings', 'error');
     navigate('settings');
     return;
   }
@@ -1618,7 +1807,7 @@ async function publishListing() {
 
 // ─── ETSY LISTING STATE MANAGEMENT ─────────
 async function etsyUpdateState(listingId, newState) {
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
   if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
@@ -1650,7 +1839,7 @@ async function etsyUpdateState(listingId, newState) {
 
 async function etsyDeleteListing(listingId) {
   if (!confirm('Delete this listing permanently from Etsy? This cannot be undone.')) return;
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
   if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
@@ -1671,7 +1860,7 @@ async function etsyDeleteListing(listingId) {
 
 // ─── SHIPPING PROFILES ─────────────────────
 async function fetchShippingProfiles() {
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
   if (!xApiKey || !token || !shopId) return;
@@ -1690,7 +1879,7 @@ async function fetchShippingProfiles() {
 }
 
 async function createShippingProfile() {
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
   if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
@@ -1736,7 +1925,7 @@ function showCreateShippingProfile() {
 
 // ─── READINESS STATES ──────────────────────
 async function fetchReadinessStates() {
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
   if (!xApiKey || !token || !shopId) return;
@@ -1758,7 +1947,7 @@ async function fetchReadinessStates() {
 }
 
 async function createReadinessState() {
-  const xApiKey = getXApiKey();
+  const xApiKey = getSetting('etsyApiKey');
   const token = getSetting('etsyAccessToken');
   const shopId = getSetting('etsyShopId');
   if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
@@ -2026,9 +2215,12 @@ navigate = function(page) {
   if (page === 'dashboard') renderDefaultsCard();
 };
 
-// ─── DRAG & DROP ────────────────────────────
+// ─── INIT ────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
+
+  // Check if we're returning from an OAuth redirect
+  handleOAuthCallback();
 
   // Inject pin buttons after page load
   setTimeout(injectPinButtons, 200);
