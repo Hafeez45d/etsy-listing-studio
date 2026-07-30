@@ -6,25 +6,31 @@ const ETSY_API_KEY = process.env.ETSY_API_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ETSY_BASE = 'https://api.etsy.com/v3';
 const ETSY_AUTH_BASE = 'https://www.etsy.com';
-const REDIRECT_URI = process.env.REDIRECT_URI || `${process.env.RENDER_EXTERNAL_URL || 'https://etsystudiobackend-cyhx0abi.b4a.run'}/auth/etsy/callback`;
+
+function getRedirectUri(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  return `${proto}://${host}/auth/etsy/callback`;
+}
 
 export default function authRoutes(app) {
 
   // Initiate OAuth
   app.get('/auth/etsy', (req, res) => {
+    const redirectUri = getRedirectUri(req);
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
     const state = crypto.randomBytes(16).toString('hex');
 
     const sessions = sessionStore.clean();
-    sessions[state] = { codeVerifier, createdAt: Date.now() };
+    sessions[state] = { codeVerifier, redirectUri, createdAt: Date.now() };
     sessionStore.save(sessions);
 
     const scopes = ['listings_r', 'listings_w', 'listings_d', 'shops_r', 'shops_w'].join('%20');
 
     const authUrl = `${ETSY_AUTH_BASE}/oauth/connect` +
       `?response_type=code` +
-      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&scope=${scopes}` +
       `&client_id=${ETSY_API_KEY}` +
       `&state=${state}` +
@@ -36,6 +42,7 @@ export default function authRoutes(app) {
 
   // OAuth callback
   app.get('/auth/etsy/callback', async (req, res) => {
+    const redirectUri = getRedirectUri(req);
     const { code, state } = req.query;
     if (!code || !state) return res.redirect(`${FRONTEND_URL}?error=missing_params`);
 
@@ -43,6 +50,8 @@ export default function authRoutes(app) {
     const session = sessions[state];
     if (!session) return res.redirect(`${FRONTEND_URL}?error=invalid_state`);
 
+    // Use the redirectUri stored in session (from original request), fall back to current
+    const storedRedirectUri = session.redirectUri || redirectUri;
     delete sessions[state];
     sessionStore.save(sessions);
 
@@ -53,7 +62,7 @@ export default function authRoutes(app) {
         body: new URLSearchParams({
           grant_type: 'authorization_code',
           client_id: ETSY_API_KEY,
-          redirect_uri: REDIRECT_URI,
+          redirect_uri: storedRedirectUri,
           code,
           code_verifier: session.codeVerifier
         })
