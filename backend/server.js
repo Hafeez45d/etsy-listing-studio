@@ -31,6 +31,16 @@ app.use('/api/listings/:listingId/files', express.raw({ type: 'multipart/form-da
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '..')));
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    shop: tokenStore.shopName || null,
+    shopId: tokenStore.shopId || null,
+    connected: tokenStore.isConnected()
+  });
+});
+
 // API health
 app.get('/api/health', (req, res) => {
   res.json({
