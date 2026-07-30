@@ -960,7 +960,7 @@ body {
 
 <script>
 // ─── CONFIG ──────────────────────────────────
-const BACKEND_URL = 'https://etsy-listing-studio-backend.onrender.com';
+const BACKEND_URL = 'https://REPLACE_WITH_RENDER_URL.onrender.com';
 // For local dev, uncomment below and comment the above:
 // const BACKEND_URL = 'http://localhost:3000';
 
@@ -971,13 +971,15 @@ const state = {
   uploadedImages: [],
   uploadedFiles: [],
   tags: [],
-  dashboardTab: 'all'
+  dashboardTab: 'all',
+  etsyConnected: false,
+  etsyShopId: null,
+  etsyShopName: null
 };
 
 // ─── SETTINGS MANAGEMENT ────────────────────
 function loadSettings() {
-  const keys = ['etsyApiKey', 'etsyAccessToken','etsyRefreshToken','etsyShopId','etsyShopName',
-    'geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
+  const keys = ['geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
     'defaultAIProvider','shopName'];
   keys.forEach(k => {
     const el = document.getElementById(k);
@@ -987,13 +989,12 @@ function loadSettings() {
       else el.value = val;
     }
   });
+  checkEtsyStatus();
   updateAllApiStatuses();
-  updateEtsyNavStatus();
 }
 
 function saveSettings() {
-  const keys = ['etsyApiKey', 'etsyAccessToken','etsyRefreshToken','etsyShopId','etsyShopName',
-    'geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
+  const keys = ['geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
     'defaultAIProvider','shopName'];
   keys.forEach(k => {
     const el = document.getElementById(k);
@@ -1004,17 +1005,6 @@ function saveSettings() {
     }
   });
   updateAllApiStatuses();
-  updateEtsyNavStatus();
-}
-
-// Access token is now stored in local settings (not in backend)
-// The backend holds the Keystring + Shared Secret; frontend stores the bearer token
-function getEtsyAccessToken() {
-  return getSetting('etsyAccessToken');
-}
-
-function getEtsyRefreshToken() {
-  return getSetting('etsyRefreshToken');
 }
 
 function getSetting(k) {
@@ -1027,163 +1017,79 @@ function btoaSafe(s) { try { return btoa(unescape(encodeURIComponent(s))); } cat
 function atobSafe(s) { try { return decodeURIComponent(escape(atob(s))); } catch(e) { return ''; } }
 
 // ─── ETSY OAUTH FLOW ─────────────────────────
-async function connectEtsy() {
-  const btn = document.getElementById('btnConnectEtsy');
-  const status = document.getElementById('etsyConnectStatus');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Preparing...';
-  status.textContent = '';
-
+async function checkEtsyStatus() {
   try {
-    // Save the current page so we can come back to it
-    localStorage.setItem('etsyStudio_oauthReturnPage', 'settings');
-
-    const res = await fetch(`${BACKEND_URL}/auth/url`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to get auth URL');
-    }
-
+    const res = await fetch(`${BACKEND_URL}/auth/status`);
     const data = await res.json();
-    console.log('[OAuth] Redirecting to Etsy...');
-    status.textContent = 'Redirecting to Etsy...';
-    window.location.href = data.url;
-  } catch (e) {
-    showToast('Connection failed: ' + e.message, 'error');
-    status.textContent = 'Failed: ' + e.message;
-    btn.disabled = false;
-    btn.innerHTML = '🔗 Connect with Etsy';
+    state.etsyConnected = data.connected;
+    state.etsyShopId = data.shopId;
+    state.etsyShopName = data.shopName;
+    updateConnectUI();
+    updateEtsyNavStatus();
+  } catch(e) {
+    state.etsyConnected = false;
+    updateConnectUI();
   }
 }
 
-// Handle the OAuth callback when redirected back from Etsy
-async function handleOAuthCallback() {
+async function connectEtsy() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/auth/etsy`);
+    const data = await res.json();
+    if (data.authUrl) {
+      window.location.href = data.authUrl;
+    } else {
+      showToast('Failed to get authorization URL', 'error');
+    }
+  } catch(e) {
+    showToast('Backend connection failed: ' + e.message, 'error');
+  }
+}
+
+// Handle OAuth callback from Etsy (called on page load)
+(function handleOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
-  const state = params.get('state');
+  const error = params.get('error');
 
-  if (!code || !state) return false;
-
-  // Clean the URL (remove query params)
-  if (window.history && window.history.replaceState) {
-    const cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
+  if (error) {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => showToast('Etsy connection failed: ' + error, 'error'), 500);
+    return;
   }
 
-  showToast('Completing Etsy authorization...');
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/auth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, state }),
+  // Check for successful redirect from backend
+  if (params.get('etsy_connected') === 'true') {
+    window.history.replaceState({}, '', window.location.pathname);
+    checkEtsyStatus().then(() => {
+      if (state.etsyConnected) {
+        showToast('Connected to Etsy: ' + (state.etsyShopName || 'your shop'));
+      }
     });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Token exchange failed');
-    }
-
-    const data = await res.json();
-
-    // Store tokens + API key
-    if (data.api_key) {
-      document.getElementById('etsyApiKey').value = data.api_key;
-    }
-    document.getElementById('etsyAccessToken').value = data.access_token;
-    if (data.refresh_token) {
-      document.getElementById('etsyRefreshToken').value = data.refresh_token;
-    }
-    saveSettings();
-
-    // Store shop info
-    if (data.shop) {
-      document.getElementById('etsyShopId').value = data.shop.shop_id;
-      document.getElementById('etsyShopName').value = data.shop.shop_name || data.shop.title || '';
-      saveSettings();
-    }
-
-    updateAllApiStatuses();
-    updateEtsyNavStatus();
-    updateConnectUI();
-
-    const shopName = data.shop ? data.shop.shop_name : 'your shop';
-    showToast(`✓ Connected to Etsy: ${shopName}`);
-
-    // Navigate back to the page the user was on
-    const returnPage = localStorage.getItem('etsyStudio_oauthReturnPage') || 'settings';
-    localStorage.removeItem('etsyStudio_oauthReturnPage');
-    navigate(returnPage);
-
-    return true;
-  } catch (e) {
-    showToast('Authorization failed: ' + e.message, 'error');
-    updateAllApiStatuses();
-    updateEtsyNavStatus();
-    updateConnectUI();
-    return false;
   }
-}
+})();
 
 async function disconnectEtsy() {
   if (!confirm('Disconnect from Etsy? You will need to re-authorize to reconnect.')) return;
-
-  document.getElementById('etsyAccessToken').value = '';
-  document.getElementById('etsyRefreshToken').value = '';
-  document.getElementById('etsyApiKey').value = '';
-  // Keep shop ID/name for reference, or clear them
-  document.getElementById('etsyShopId').value = '';
-  document.getElementById('etsyShopName').value = '';
-  saveSettings();
-  updateAllApiStatuses();
-  updateEtsyNavStatus();
+  try {
+    await fetch(`${BACKEND_URL}/auth/disconnect`, { method: 'POST' });
+  } catch(e) {}
+  state.etsyConnected = false;
+  state.etsyShopId = null;
+  state.etsyShopName = null;
   updateConnectUI();
+  updateEtsyNavStatus();
   showToast('Disconnected from Etsy');
 }
 
-// Refresh access token using refresh_token
-async function refreshAccessToken() {
-  const refreshToken = getEtsyRefreshToken();
-  if (!refreshToken) return null;
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-
-    if (!res.ok) {
-      console.error('[Auth] Token refresh failed:', res.status);
-      return null;
-    }
-
-    const data = await res.json();
-    if (data.api_key) {
-      document.getElementById('etsyApiKey').value = data.api_key;
-    }
-    document.getElementById('etsyAccessToken').value = data.access_token;
-    if (data.refresh_token) {
-      document.getElementById('etsyRefreshToken').value = data.refresh_token;
-    }
-    saveSettings();
-    console.log('[Auth] Token refreshed successfully');
-    return data.access_token;
-  } catch (e) {
-    console.error('[Auth] Token refresh error:', e.message);
-    return null;
-  }
-}
-
 function updateConnectUI() {
-  const connected = !!(getEtsyAccessToken() && getSetting('etsyShopId'));
-  document.getElementById('btnConnectEtsy').style.display = connected ? 'none' : '';
-  document.getElementById('btnDisconnectEtsy').style.display = connected ? '' : 'none';
-  document.getElementById('btnTestEtsy').style.display = connected ? '' : '';
+  const connected = state.etsyConnected;
+  const connectBtn = document.getElementById('btnConnectEtsy');
+  const disconnectBtn = document.getElementById('btnDisconnectEtsy');
+  const status = document.getElementById('etsyConnectStatus');
+  if (connectBtn) connectBtn.style.display = connected ? 'none' : '';
+  if (disconnectBtn) disconnectBtn.style.display = connected ? '' : 'none';
+  if (status) status.textContent = connected ? (state.etsyShopName || 'Connected') : '';
 }
 
 // ─── NAVIGATION ─────────────────────────────
@@ -1211,13 +1117,12 @@ function showToast(msg, type = 'success') {
 
 // ─── API STATUS ─────────────────────────────
 function updateAllApiStatuses() {
-  const etsyReady = !!(getEtsyAccessToken() && getSetting('etsyShopId'));
+  const etsyReady = !!(state.etsyConnected && state.etsyShopId);
   updateApiStatus('etsy', etsyReady);
   updateApiStatus('gemini', !!getSetting('geminiApiKey'));
   updateApiStatus('openai', !!getSetting('openaiApiKey'));
   updateApiStatus('deepseek', !!getSetting('deepseekApiKey'));
   updateEtsyNavStatus();
-  updateConnectUI();
 }
 
 function updateApiStatus(provider, configured) {
@@ -1228,44 +1133,30 @@ function updateApiStatus(provider, configured) {
 }
 
 function updateEtsyNavStatus() {
-  const connected = !!(getEtsyAccessToken() && getSetting('etsyShopId'));
+  const connected = !!(state.etsyConnected && state.etsyShopId);
   const el = document.getElementById('etsyStatus');
   const text = document.getElementById('etsyStatusText');
-  el.className = 'etsy-status ' + (connected ? 'connected' : 'disconnected');
-  text.textContent = connected ? 'Etsy: Connected' : 'Etsy: Offline';
+  if (el) el.className = 'etsy-status ' + (connected ? 'connected' : 'disconnected');
+  if (text) text.textContent = connected ? 'Etsy: Connected' : 'Etsy: Offline';
 }
 
 // ─── TEST CONNECTIONS ───────────────────────
 async function testEtsyConnection() {
-  const token = getEtsyAccessToken();
-  const shopId = getSetting('etsyShopId');
-  if (!token || !shopId) {
-    showToast('Please connect to Etsy first using the "Connect with Etsy" button', 'error');
+  if (!state.etsyConnected) {
+    showToast('Please connect to Etsy first using the Connect button', 'error');
     return;
   }
   showToast('Testing Etsy connection...');
   try {
-    const res = await fetch(`${BACKEND_URL}/shop/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: token }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.shop) {
-        showToast(`✓ Connected to Etsy shop: ${data.shop.shop_name || shopId}`);
-        // Update shop info if it changed
-        document.getElementById('etsyShopName').value = data.shop.shop_name || '';
-        saveSettings();
-      } else {
-        showToast('Token is valid but no shop found. Create a shop on Etsy first.', 'error');
-      }
+    const res = await fetch(`${BACKEND_URL}/api/test-connection`);
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`✓ Connected to Etsy shop: ${data.shop_name || data.shop_id}`);
     } else {
-      const err = await res.json();
-      showToast('Etsy connection failed: ' + (err.error || res.status), 'error');
+      showToast('Connection failed: ' + (data.error || 'Unknown error'), 'error');
     }
   } catch(e) {
-    showToast('Connection error: ' + e.message, 'error');
+    showToast('Backend connection error: ' + e.message, 'error');
   }
 }
 
@@ -1641,15 +1532,202 @@ function restoreDraft() {
 
 // ─── PUBLISH TO ETSY ────────────────────────
 async function publishListing() {
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-
-  if (!xApiKey || !token || !shopId) {
-    showToast('Please connect to Etsy first using "Connect with Etsy" in Settings', 'error');
+  if (!state.etsyConnected) {
+    showToast('Please connect to Etsy first in Settings', 'error');
     navigate('settings');
     return;
   }
+
+  const title = document.getElementById('listingTitle').value.trim();
+  if (!title) { showToast('Please enter a title', 'error'); return; }
+  if (state.uploadedImages.length === 0) { showToast('Please add at least one image', 'error'); return; }
+
+  const listingType = document.getElementById('listingType').value;
+  const isPhysical = listingType === 'physical';
+
+  if (listingType === 'download' && state.uploadedFiles.length === 0) {
+    showToast('Digital listings require at least one file', 'error');
+    return;
+  }
+
+  if (isPhysical) {
+    const shipId = document.getElementById('shippingProfileId').value;
+    const readinessId = document.getElementById('readinessStateId').value;
+    if (!shipId) { showToast('Physical listings require a shipping profile. Create one in Shipping & Processing.', 'error'); return; }
+    if (!readinessId) { showToast('Physical listings require a readiness state. Create one in Shipping & Processing.', 'error'); return; }
+  }
+
+  const btn = document.getElementById('btnPublish');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Publishing...';
+
+  const progressDiv = document.getElementById('publishProgress');
+  progressDiv.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;">
+      <div style="font-weight:600;margin-bottom:12px;">Publishing to Etsy via backend...</div>
+      <div id="progressSteps"></div>
+    </div>
+  `;
+  const steps = document.getElementById('progressSteps');
+  function addStep(msg, status = 'pending') {
+    const icons = { pending: '⏳', success: '✅', error: '❌' };
+    steps.innerHTML += `<div style="font-size:13px;margin:6px 0;color:var(--text-${status==='error'?'muted':status==='success'?'primary':'secondary'});">${icons[status]} ${msg}</div>`;
+  }
+
+  try {
+    // Step 1: Create draft listing
+    addStep('Creating draft listing on Etsy...');
+    const listingPayload = {
+      type: isPhysical ? 'physical' : 'download',
+      title: title,
+      description: document.getElementById('listingDescription').value,
+      price: parseFloat(document.getElementById('listingPrice').value) || 0,
+      quantity: parseInt(document.getElementById('listingQuantity').value) || 999,
+      who_made: document.getElementById('whoMade').value,
+      when_made: document.getElementById('listingYear').value || '2020_2026',
+      is_supply: document.getElementById('whatIs').value === 'supply_or_tool',
+      tags: state.tags,
+      taxonomy_id: 1
+    };
+
+    if (isPhysical) {
+      listingPayload.shipping_profile_id = parseInt(document.getElementById('shippingProfileId').value);
+    }
+
+    const createRes = await fetch(`${BACKEND_URL}/api/listings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(listingPayload)
+    });
+
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      let errMsg = errText;
+      try { errMsg = JSON.parse(errText).error || errText; } catch(e) {}
+      throw new Error(errMsg || 'Failed to create listing');
+    }
+
+    const listingData = await createRes.json();
+    const listingId = listingData.listing_id;
+    addStep(`Listing created (ID: ${listingId})`, 'success');
+
+    // Step 2: Upload images
+    addStep('Uploading images...');
+    for (let i = 0; i < state.uploadedImages.length; i++) {
+      const img = state.uploadedImages[i];
+      const formData = new FormData();
+      const blob = img.file || await (await fetch(img.data)).blob();
+      const ext = img.name.split('.').pop() || 'jpg';
+      formData.append('image', blob, `listing_image_${i + 1}.${ext}`);
+      formData.append('rank', i + 1);
+
+      const imgRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}/images`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (imgRes.ok) addStep(`Image ${i + 1}/${state.uploadedImages.length} uploaded`, 'success');
+      else addStep(`Image ${i + 1} failed`, 'error');
+    }
+
+    // Step 3: Upload digital files
+    if (listingType === 'download' && state.uploadedFiles.length > 0) {
+      addStep('Uploading digital files...');
+      for (let i = 0; i < state.uploadedFiles.length; i++) {
+        const file = state.uploadedFiles[i];
+        const formData = new FormData();
+        formData.append('file', file.file, file.name.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 70));
+        formData.append('rank', i + 1);
+
+        const fileRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}/files`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (fileRes.ok) addStep(`File ${i + 1}/${state.uploadedFiles.length} uploaded`, 'success');
+        else addStep(`File ${i + 1} failed`, 'error');
+      }
+    }
+
+    // Step 4: Activate
+    addStep('Activating listing...');
+    const patchBody = new URLSearchParams();
+    patchBody.append('state', 'active');
+    const patchRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: patchBody.toString()
+    });
+
+    if (patchRes.ok) addStep('Listing activated (published)', 'success');
+    else addStep('Activation step returned: ' + patchRes.status, 'error');
+
+    const newListing = {
+      id: listingId, etsyId: listingId, title: title,
+      price: parseFloat(document.getElementById('listingPrice').value) || 0,
+      status: 'published', state: 'active',
+      publishedAt: new Date().toISOString(), imageUrl: state.uploadedImages[0]?.data || ''
+    };
+    state.listings.unshift(newListing);
+    localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+    localStorage.removeItem('etsyStudio_draft');
+
+    addStep('✓ Listing published successfully!', 'success');
+    showToast('Listing published to Etsy! 🎉');
+    setTimeout(() => navigate('dashboard'), 2000);
+  } catch(e) {
+    addStep('Error: ' + e.message, 'error');
+    showToast('Publishing failed: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '🚀 Publish to Etsy';
+}
+
+// ─── ETSY LISTING STATE MANAGEMENT ─────────
+async function etsyUpdateState(listingId, newState) {
+  if (!state.etsyConnected) { showToast('Etsy not connected', 'error'); return; }
+  const body = new URLSearchParams();
+  body.append('state', newState);
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    if (res.ok) {
+      const listing = state.listings.find(l => l.etsyId === listingId || l.id === listingId);
+      if (listing) {
+        listing.state = newState;
+        listing.status = newState === 'active' ? 'published' : newState;
+        localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+      }
+      showToast(`Listing ${newState === 'active' ? 'activated' : 'deactivated'}`);
+      loadDashboard();
+    } else {
+      showToast('State update failed: ' + res.status, 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function etsyDeleteListing(listingId) {
+  if (!confirm('Delete this listing permanently from Etsy? This cannot be undone.')) return;
+  if (!state.etsyConnected) { showToast('Etsy not connected', 'error'); return; }
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, { method: 'DELETE' });
+    if (res.ok) {
+      deleteListing(listingId);
+      showToast('Listing deleted from Etsy');
+    } else {
+      showToast('Delete failed: ' + res.status, 'error');
+    }
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ─── SHIPPING PROFILES ─────────────────────
+async function fetchShippingProfiles() {
+  if (!state.etsyConnected) return;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/shipping-profiles`);
 
   const title = document.getElementById('listingTitle').value.trim();
   if (!title) { showToast('Please enter a title', 'error'); return; }
@@ -1709,9 +1787,9 @@ async function publishListing() {
       listingPayload.shipping_profile_id = parseInt(document.getElementById('shippingProfileId').value);
     }
 
-    const createRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings`, {
+    const createRes = await fetch(`${BACKEND_URL}/api/listings`, {
       method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(listingPayload)
     });
 
@@ -1736,9 +1814,8 @@ async function publishListing() {
       formData.append('image', blob, `listing_image_${i + 1}.${ext}`);
       formData.append('rank', i + 1);
 
-      const imgRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`, {
+      const imgRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}/images`, {
         method: 'POST',
-        headers: authHeaders,
         body: formData
       });
 
@@ -1746,7 +1823,7 @@ async function publishListing() {
       else addStep(`Image ${i + 1} failed`, 'error');
     }
 
-    // Step 3: Upload digital files (digital items only)
+    // Step 3: Upload digital files
     if (listingType === 'download' && state.uploadedFiles.length > 0) {
       addStep('Uploading digital files...');
       for (let i = 0; i < state.uploadedFiles.length; i++) {
@@ -1755,9 +1832,8 @@ async function publishListing() {
         formData.append('file', file.file, file.name.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 70));
         formData.append('rank', i + 1);
 
-        const fileRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/files`, {
+        const fileRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}/files`, {
           method: 'POST',
-          headers: authHeaders,
           body: formData
         });
 
@@ -1766,29 +1842,24 @@ async function publishListing() {
       }
     }
 
-    // Step 4: Set state to active (PATCH updateListing state=active)
+    // Step 4: Activate
     addStep('Activating listing...');
     const patchBody = new URLSearchParams();
     patchBody.append('state', 'active');
-    const patchRes = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`, {
+    const patchRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, {
       method: 'PATCH',
-      headers: { ...authHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: patchBody.toString()
     });
 
     if (patchRes.ok) addStep('Listing activated (published)', 'success');
     else addStep('Activation step returned: ' + patchRes.status, 'error');
 
-    // Save to local listings
     const newListing = {
-      id: listingId,
-      etsyId: listingId,
-      title: title,
+      id: listingId, etsyId: listingId, title: title,
       price: parseFloat(document.getElementById('listingPrice').value) || 0,
-      status: 'published',
-      state: 'active',
-      publishedAt: new Date().toISOString(),
-      imageUrl: state.uploadedImages[0]?.data || ''
+      status: 'published', state: 'active',
+      publishedAt: new Date().toISOString(), imageUrl: state.uploadedImages[0]?.data || ''
     };
     state.listings.unshift(newListing);
     localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
@@ -1807,18 +1878,13 @@ async function publishListing() {
 
 // ─── ETSY LISTING STATE MANAGEMENT ─────────
 async function etsyUpdateState(listingId, newState) {
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
-
+  if (!state.etsyConnected) { showToast('Etsy not connected', 'error'); return; }
   const body = new URLSearchParams();
   body.append('state', newState);
-
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`, {
+    const res = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, {
       method: 'PATCH',
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
     });
     if (res.ok) {
@@ -1828,10 +1894,9 @@ async function etsyUpdateState(listingId, newState) {
         listing.status = newState === 'active' ? 'published' : newState;
         localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
       }
-      showToast(`Listing ${newState === 'active' ? 'activated' : newState === 'inactive' ? 'deactivated' : newState}`);
+      showToast(`Listing ${newState === 'active' ? 'activated' : 'deactivated'}`);
       loadDashboard();
     } else {
-      const err = await res.text();
       showToast('State update failed: ' + res.status, 'error');
     }
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
@@ -1839,16 +1904,9 @@ async function etsyUpdateState(listingId, newState) {
 
 async function etsyDeleteListing(listingId) {
   if (!confirm('Delete this listing permanently from Etsy? This cannot be undone.')) return;
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
-
+  if (!state.etsyConnected) { showToast('Etsy not connected', 'error'); return; }
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`, {
-      method: 'DELETE',
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
-    });
+    const res = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, { method: 'DELETE' });
     if (res.ok) {
       deleteListing(listingId);
       showToast('Listing deleted from Etsy');
@@ -1860,15 +1918,9 @@ async function etsyDeleteListing(listingId) {
 
 // ─── SHIPPING PROFILES ─────────────────────
 async function fetchShippingProfiles() {
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) return;
-
+  if (!state.etsyConnected) return;
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/shipping-profiles`, {
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
-    });
+    const res = await fetch(`${BACKEND_URL}/api/shipping-profiles`);
     if (res.ok) {
       const data = await res.json();
       const sel = document.getElementById('shippingProfileId');
@@ -1879,10 +1931,7 @@ async function fetchShippingProfiles() {
 }
 
 async function createShippingProfile() {
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
+  if (!state.etsyConnected) { showToast('Etsy not connected', 'error'); return; }
 
   const title = prompt('Shipping profile title (e.g., "Free US Shipping"):');
   if (!title) return;
@@ -1901,9 +1950,9 @@ async function createShippingProfile() {
   body.append('destination_region', destRegion);
 
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/shipping-profiles`, {
+    const res = await fetch(`${BACKEND_URL}/api/shipping-profiles`, {
       method: 'POST',
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
     });
     if (res.ok) {
@@ -1925,15 +1974,9 @@ function showCreateShippingProfile() {
 
 // ─── READINESS STATES ──────────────────────
 async function fetchReadinessStates() {
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) return;
-
+  if (!state.etsyConnected) return;
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/readiness-state-definitions`, {
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}` }
-    });
+    const res = await fetch(`${BACKEND_URL}/api/readiness-states`);
     if (res.ok) {
       const data = await res.json();
       const sel = document.getElementById('readinessStateId');
@@ -1947,26 +1990,23 @@ async function fetchReadinessStates() {
 }
 
 async function createReadinessState() {
-  const xApiKey = getSetting('etsyApiKey');
-  const token = getSetting('etsyAccessToken');
-  const shopId = getSetting('etsyShopId');
-  if (!xApiKey || !token || !shopId) { showToast('Etsy API not configured', 'error'); return; }
+  if (!state.etsyConnected) { showToast('Etsy not connected', 'error'); return; }
 
-  const state = prompt('Readiness state ("ready_to_ship" or "made_to_order"):', 'ready_to_ship');
-  if (!state) return;
+  const rdState = prompt('Readiness state ("ready_to_ship" or "made_to_order"):', 'ready_to_ship');
+  if (!rdState) return;
   const minDays = prompt('Min processing days:', '1');
   const maxDays = prompt('Max processing days:', '3');
 
   const body = new URLSearchParams();
-  body.append('readiness_state', state);
+  body.append('readiness_state', rdState);
   body.append('min_processing_time', minDays || '1');
   body.append('max_processing_time', maxDays || '3');
   body.append('processing_time_unit', 'days');
 
   try {
-    const res = await fetch(`https://api.etsy.com/v3/application/shops/${shopId}/readiness-state-definitions`, {
+    const res = await fetch(`${BACKEND_URL}/api/readiness-states`, {
       method: 'POST',
-      headers: { 'x-api-key': xApiKey, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
     });
     if (res.ok) {
