@@ -2,14 +2,13 @@ services:
   - type: web
     name: etsy-listing-studio
     env: docker
-    region: oregon
     plan: free
     healthCheckPath: /api/health
     envVars:
       - key: ETSY_API_KEY
-        sync: false
+        value: 7w9a10b0roho4m82n160avzw
       - key: ETSY_SHARED_SECRET
-        sync: false
+        value: 7kg4si6cyp
       - key: FRONTEND_URL
         value: https://hafeez45d.github.io/etsy-listing-studio/
       - key: ENCRYPTION_SECRET
