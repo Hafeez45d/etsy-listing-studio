@@ -9,6 +9,7 @@ const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://hafeez45d.github.io/etsy-listing-studio/';
 
 const app = express();
+app.set('trust proxy', true);
 
 app.use(cors({
   origin: function (origin, callback) {

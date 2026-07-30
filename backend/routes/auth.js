@@ -8,9 +8,8 @@ const ETSY_BASE = 'https://api.etsy.com/v3';
 const ETSY_AUTH_BASE = 'https://www.etsy.com';
 
 function getRedirectUri(req) {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
   const host = req.headers['x-forwarded-host'] || req.get('host');
-  return `${proto}://${host}/auth/etsy/callback`;
+  return `https://${host}/auth/etsy/callback`;
 }
 
 export default function authRoutes(app) {
