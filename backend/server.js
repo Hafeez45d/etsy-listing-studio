@@ -9,7 +9,7 @@ import listingRoutes from './routes/listings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://hafeez45d.github.io/etsy-listing-studio/';
 
 const app = express();
 

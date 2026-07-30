@@ -927,6 +927,8 @@ body {
           <div class="form-group">
             <label class="form-label">Model</label>
             <select class="form-select" id="deepseekModel" onchange="saveSettings()">
+              <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+              <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
               <option value="deepseek-chat">DeepSeek Chat (V3)</option>
               <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
             </select>
@@ -1196,10 +1198,10 @@ async function testDeepSeekConnection() {
   if (!key) { showToast('Please enter a DeepSeek API key', 'error'); return; }
   showToast('Testing DeepSeek connection...');
   try {
-    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: 'Say ok' }], max_tokens: 5 })
+      body: JSON.stringify({ model: 'deepseek-v4-pro', messages: [{ role: 'user', content: 'Say ok' }], max_tokens: 5 })
     });
     if (res.ok) showToast('✓ DeepSeek API connected');
     else showToast('DeepSeek error: ' + res.status, 'error');

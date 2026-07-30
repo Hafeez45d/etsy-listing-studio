@@ -6,7 +6,7 @@ const ETSY_API_KEY = process.env.ETSY_API_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ETSY_BASE = 'https://api.etsy.com/v3';
 const ETSY_AUTH_BASE = 'https://www.etsy.com';
-const REDIRECT_URI = process.env.REDIRECT_URI || `${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000'}/auth/etsy/callback`;
+const REDIRECT_URI = process.env.REDIRECT_URI || `${process.env.RENDER_EXTERNAL_URL || 'https://etsystudiobackend-cyhx0abi.b4a.run'}/auth/etsy/callback`;
 
 export default function authRoutes(app) {
 
