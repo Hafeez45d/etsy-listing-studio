@@ -1047,7 +1047,7 @@ async function connectEtsy() {
 }
 
 // Handle OAuth callback from Etsy (called on page load)
-(function handleOAuthCallback() {
+function handleOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const error = params.get('error');
@@ -1067,7 +1067,10 @@ async function connectEtsy() {
       }
     });
   }
-})();
+}
+
+// Run on page load
+handleOAuthCallback();
 
 async function disconnectEtsy() {
   if (!confirm('Disconnect from Etsy? You will need to re-authorize to reconnect.')) return;
@@ -2258,9 +2261,6 @@ navigate = function(page) {
 // ─── INIT ────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
-
-  // Check if we're returning from an OAuth redirect
-  handleOAuthCallback();
 
   // Inject pin buttons after page load
   setTimeout(injectPinButtons, 200);
