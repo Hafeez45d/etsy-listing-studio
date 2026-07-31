@@ -97,7 +97,7 @@ export default function authRoutes(app) {
         return res.redirect(`${FRONTEND_URL}?error=token_exchange_failed&http=${tokenRes.status}`);
       }
 
-      const data = await tokenRes.json();
+      const data = JSON.parse(tokenText);
       let shopId = null;
       let shopName = null;
 
