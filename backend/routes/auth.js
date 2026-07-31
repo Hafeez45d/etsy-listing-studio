@@ -42,34 +42,59 @@ export default function authRoutes(app) {
   // OAuth callback
   app.get('/auth/etsy/callback', async (req, res) => {
     const redirectUri = getRedirectUri(req);
-    const { code, state } = req.query;
-    if (!code || !state) return res.redirect(`${FRONTEND_URL}?error=missing_params`);
+    const { code, state, error: etsyError, error_description } = req.query;
+
+    console.log('=== OAUTH CALLBACK ===');
+    console.log('Query params:', JSON.stringify(req.query, null, 2));
+    console.log('Has ETSY_API_KEY:', !!process.env.ETSY_API_KEY);
+    console.log('Has ETSY_SHARED_SECRET:', !!process.env.ETSY_SHARED_SECRET);
+    console.log('Has FRONTEND_URL:', !!process.env.FRONTEND_URL);
+    console.log('Computed redirectUri:', redirectUri);
+
+    if (!code || !state) {
+      if (etsyError) {
+        console.error('Etsy returned error:', etsyError, '| description:', error_description);
+        return res.redirect(`${FRONTEND_URL}?error=${etsyError}&desc=${encodeURIComponent(error_description || '')}`);
+      }
+      console.error('Missing code or state');
+      return res.redirect(`${FRONTEND_URL}?error=missing_params`);
+    }
 
     const sessions = sessionStore.load();
     const session = sessions[state];
-    if (!session) return res.redirect(`${FRONTEND_URL}?error=invalid_state`);
+    if (!session) {
+      console.error('No session found for state:', state);
+      console.error('Available states:', Object.keys(sessions));
+      return res.redirect(`${FRONTEND_URL}?error=invalid_state`);
+    }
 
-    // Use the redirectUri stored in session (from original request), fall back to current
     const storedRedirectUri = session.redirectUri || redirectUri;
     delete sessions[state];
     sessionStore.save(sessions);
 
     try {
+      const tokenBody = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: ETSY_API_KEY,
+        redirect_uri: storedRedirectUri,
+        code,
+        code_verifier: session.codeVerifier
+      });
+      console.log('Token request body (code masked):', tokenBody.toString().replace(code, '[CODE_MASKED]'));
+
       const tokenRes = await fetch(`${ETSY_BASE}/public/oauth/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: ETSY_API_KEY,
-          redirect_uri: storedRedirectUri,
-          code,
-          code_verifier: session.codeVerifier
-        })
+        body: tokenBody
       });
 
+      const tokenText = await tokenRes.text();
+      console.log('Token response status:', tokenRes.status);
+      console.log('Token response body:', tokenText);
+
       if (!tokenRes.ok) {
-        console.error('Token exchange failed:', await tokenRes.text());
-        return res.redirect(`${FRONTEND_URL}?error=token_exchange_failed`);
+        console.error('Token exchange FAILED');
+        return res.redirect(`${FRONTEND_URL}?error=token_exchange_failed&http=${tokenRes.status}`);
       }
 
       const data = await tokenRes.json();
