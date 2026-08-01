@@ -8,6 +8,14 @@ import listingRoutes from './routes/listings.js';
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://hafeez45d.github.io/etsy-listing-studio/';
 
+// In-memory log buffer for diagnostics
+const logBuffer = [];
+export function pushLog(msg) {
+  logBuffer.push({ ts: new Date().toISOString(), msg });
+  if (logBuffer.length > 50) logBuffer.shift();
+}
+export function getLogs() { return [...logBuffer]; }
+
 const app = express();
 app.set('trust proxy', true);
 
@@ -39,6 +47,11 @@ app.get('/api/health', (req, res) => {
 // Routes
 authRoutes(app);
 listingRoutes(app);
+
+// Debug: view recent callback logs
+app.get('/debug/logs', (req, res) => {
+  res.json({ logs: getLogs(), etsyConnected: tokenStore.isConnected(), shopId: tokenStore.shopId, shopName: tokenStore.shopName });
+});
 
 // Start
 app.listen(PORT, '0.0.0.0', () => {

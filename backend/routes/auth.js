@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { tokenStore } from '../utils/tokenStore.js';
 import { sessionStore } from '../utils/sessionStore.js';
+import { pushLog } from '../server.js';
 
 const ETSY_API_KEY = process.env.ETSY_API_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL;
@@ -24,6 +25,7 @@ export default function authRoutes(app) {
     const sessions = sessionStore.clean();
     sessions[state] = { codeVerifier, redirectUri, createdAt: Date.now() };
     sessionStore.save(sessions);
+    pushLog(`OAuth initiated: state=${state.slice(0, 8)}... sessionCount=${Object.keys(sessions).length}`);
 
     const scopes = ['listings_r', 'listings_w', 'listings_d', 'shops_r', 'shops_w'].join('%20');
 
@@ -44,6 +46,7 @@ export default function authRoutes(app) {
     const redirectUri = getRedirectUri(req);
     const { code, state, error: etsyError, error_description } = req.query;
 
+    pushLog(`CALLBACK HIT: hasCode=${!!code} hasState=${!!state} hasError=${!!etsyError}`);
     console.log('=== OAUTH CALLBACK ===');
     console.log('Query params:', JSON.stringify(req.query, null, 2));
     console.log('Has ETSY_API_KEY:', !!process.env.ETSY_API_KEY);
@@ -53,9 +56,11 @@ export default function authRoutes(app) {
 
     if (!code || !state) {
       if (etsyError) {
+        pushLog(`Etsy returned error: ${etsyError} — ${error_description || ''}`);
         console.error('Etsy returned error:', etsyError, '| description:', error_description);
         return res.redirect(`${FRONTEND_URL}?error=${etsyError}&desc=${encodeURIComponent(error_description || '')}`);
       }
+      pushLog('Missing code or state in callback params');
       console.error('Missing code or state');
       return res.redirect(`${FRONTEND_URL}?error=missing_params`);
     }
@@ -63,10 +68,13 @@ export default function authRoutes(app) {
     const sessions = sessionStore.load();
     const session = sessions[state];
     if (!session) {
+      pushLog(`No session for state: ${state.slice(0, 8)}... Available: ${Object.keys(sessions).length}`);
       console.error('No session found for state:', state);
       console.error('Available states:', Object.keys(sessions));
       return res.redirect(`${FRONTEND_URL}?error=invalid_state`);
     }
+
+    pushLog(`Session found for state: ${state.slice(0, 8)}... Proceeding with token exchange`);
 
     const storedRedirectUri = session.redirectUri || redirectUri;
     delete sessions[state];
@@ -93,16 +101,19 @@ export default function authRoutes(app) {
       console.log('Token response body:', tokenText);
 
       if (!tokenRes.ok) {
+        pushLog(`Token exchange FAILED: HTTP ${tokenRes.status} — ${tokenText.slice(0, 200)}`);
         console.error('Token exchange FAILED');
         return res.redirect(`${FRONTEND_URL}?error=token_exchange_failed&http=${tokenRes.status}`);
       }
 
+      pushLog(`Token exchange OK: HTTP ${tokenRes.status}`);
       const data = JSON.parse(tokenText);
       let shopId = null;
       let shopName = null;
 
       // Fetch shop info
       try {
+        pushLog('Fetching shop info from Etsy...');
         console.log('=== FETCHING SHOP INFO ===');
         console.log('Access token length:', data.access_token?.length);
         const shopRes = await fetch(`${ETSY_BASE}/application/shops`, {
@@ -117,11 +128,14 @@ export default function authRoutes(app) {
           if (shop && shop.shop_id) {
             shopId = String(shop.shop_id);
             shopName = shop.shop_name || null;
+            pushLog(`Shop found: id=${shopId} name=${shopName || '(null)'}`);
             console.log('Shop found:', shopId, shopName);
           } else {
+            pushLog(`Shop response OK but no shop_id. Response shape: ${JSON.stringify(shopData).slice(0, 300)}`);
             console.error('Shop response parsed but no shop_id found. Data:', JSON.stringify(shopData).slice(0, 500));
           }
         } else {
+          pushLog(`Shop lookup FAILED: HTTP ${shopRes.status} — ${shopText.slice(0, 200)}`);
           console.error('Shop lookup returned non-OK status:', shopRes.status);
         }
       } catch (e) {
@@ -129,6 +143,7 @@ export default function authRoutes(app) {
       }
 
       tokenStore.save(data.access_token, data.refresh_token, shopId, shopName);
+      pushLog(`OAuth COMPLETE: connected=${tokenStore.isConnected()} shopId=${shopId || 'null'} shopName=${shopName || 'null'}`);
       res.redirect(`${FRONTEND_URL}?etsy_connected=true`);
     } catch (e) {
       console.error('OAuth callback error:', e);
