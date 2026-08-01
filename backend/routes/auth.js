@@ -103,16 +103,29 @@ export default function authRoutes(app) {
 
       // Fetch shop info
       try {
+        console.log('=== FETCHING SHOP INFO ===');
+        console.log('Access token length:', data.access_token?.length);
         const shopRes = await fetch(`${ETSY_BASE}/application/shops`, {
           headers: { 'x-api-key': ETSY_API_KEY, 'Authorization': `Bearer ${data.access_token}` }
         });
+        console.log('Shop lookup HTTP status:', shopRes.status);
+        const shopText = await shopRes.text();
+        console.log('Shop lookup response body:', shopText);
         if (shopRes.ok) {
-          const shop = await shopRes.json();
-          shopId = String(shop.shop_id);
-          shopName = shop.shop_name || null;
+          const shopData = JSON.parse(shopText);
+          const shop = shopData.results?.[0] || shopData;
+          if (shop && shop.shop_id) {
+            shopId = String(shop.shop_id);
+            shopName = shop.shop_name || null;
+            console.log('Shop found:', shopId, shopName);
+          } else {
+            console.error('Shop response parsed but no shop_id found. Data:', JSON.stringify(shopData).slice(0, 500));
+          }
+        } else {
+          console.error('Shop lookup returned non-OK status:', shopRes.status);
         }
       } catch (e) {
-        console.error('Failed to fetch shop:', e);
+        console.error('Failed to fetch shop:', e.message, e.stack);
       }
 
       tokenStore.save(data.access_token, data.refresh_token, shopId, shopName);
