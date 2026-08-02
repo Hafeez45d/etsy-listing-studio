@@ -35,7 +35,16 @@ async function refreshTokenIfNeeded() {
 }
 
 async function etsyFetch(path, options = {}) {
-  let res = await fetch(`${ETSY_BASE}${path}`, {
+  const url = `${ETSY_BASE}${path}`;
+  const reqLog = {
+    url,
+    method: options.method || 'GET',
+    headers: { ...options.headers, 'x-api-key': '***', 'Authorization': 'Bearer ***' },
+    body: typeof options.body === 'string' ? options.body.slice(0, 500) : undefined
+  };
+  console.log('=== ETSY REQUEST ===', JSON.stringify(reqLog, null, 2));
+
+  let res = await fetch(url, {
     ...options,
     headers: {
       'x-api-key': API_KEY_HEADER,
@@ -43,10 +52,16 @@ async function etsyFetch(path, options = {}) {
       ...options.headers
     }
   });
+  const resText = await res.text();
+  console.log('=== ETSY RESPONSE ===');
+  console.log('HTTP Status:', res.status);
+  console.log('Body:', resText.slice(0, 2000));
+
   if (res.status === 401 && tokenStore.refreshToken) {
     const refreshed = await refreshTokenIfNeeded();
     if (refreshed) {
-      res = await fetch(`${ETSY_BASE}${path}`, {
+      console.log('=== ETSY RETRY (after refresh) ===');
+      res = await fetch(url, {
         ...options,
         headers: {
           'x-api-key': API_KEY_HEADER,
@@ -54,9 +69,14 @@ async function etsyFetch(path, options = {}) {
           ...options.headers
         }
       });
+      const retryText = await res.text();
+      console.log('HTTP Status:', res.status);
+      console.log('Body:', retryText.slice(0, 2000));
+      // Reconstruct response with consumed body
+      return new Response(retryText, { status: res.status, headers: res.headers });
     }
   }
-  return res;
+  return new Response(resText, { status: res.status, headers: res.headers });
 }
 
 export default function listingRoutes(app) {
@@ -84,7 +104,18 @@ export default function listingRoutes(app) {
     if (!tokenStore.isConnected()) return res.status(401).json({ error: 'Not connected' });
     try {
       const body = { ...req.body };
-      if (Array.isArray(body.tags)) body.tags = body.tags.join(',');
+      // Sanitize tags: Etsy limits each tag to 20 chars, alphanumeric + spaces + hyphens
+      if (Array.isArray(body.tags)) {
+        body.tags = body.tags
+          .map(t => String(t).replace(/[^a-zA-Z0-9 \-]/g, '').trim().slice(0, 20))
+          .filter(t => t.length > 0)
+          .slice(0, 13);
+      }
+      // Etsy expects price in cents (integer), but user might send dollars
+      if (typeof body.price === 'number' && body.price < 100 && body.price > 0) {
+        body.price = Math.round(body.price * 100);
+      }
+      console.log('=== CREATE LISTING PAYLOAD ===', JSON.stringify(body, null, 2));
       const response = await etsyFetch(`/application/shops/${tokenStore.shopId}/listings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,6 +153,11 @@ export default function listingRoutes(app) {
   });
 
   async function uploadWithRefresh(path, body, contentType) {
+    console.log('=== ETSY UPLOAD REQUEST ===');
+    console.log('URL:', path);
+    console.log('Content-Type:', contentType);
+    console.log('Body length:', body ? body.length : 0);
+
     let res = await fetch(path, {
       method: 'POST',
       headers: {
@@ -131,9 +167,15 @@ export default function listingRoutes(app) {
       },
       body
     });
+    const resText = await res.text();
+    console.log('=== ETSY UPLOAD RESPONSE ===');
+    console.log('HTTP Status:', res.status);
+    console.log('Body:', resText.slice(0, 2000));
+
     if (res.status === 401 && tokenStore.refreshToken) {
       const refreshed = await refreshTokenIfNeeded();
       if (refreshed) {
+        console.log('=== ETSY UPLOAD RETRY (after refresh) ===');
         res = await fetch(path, {
           method: 'POST',
           headers: {
@@ -143,9 +185,13 @@ export default function listingRoutes(app) {
           },
           body
         });
+        const retryText = await res.text();
+        console.log('HTTP Status:', res.status);
+        console.log('Body:', retryText.slice(0, 2000));
+        return new Response(retryText, { status: res.status, headers: res.headers });
       }
     }
-    return res;
+    return new Response(resText, { status: res.status, headers: res.headers });
   }
 
   // Image upload
