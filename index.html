@@ -1357,7 +1357,7 @@ async function callAI(provider, prompt) {
     const key = getSetting('deepseekApiKey');
     const model = getSetting('deepseekModel') || 'deepseek-chat';
     if (!key) throw new Error('DeepSeek API key not configured');
-    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 1000 })

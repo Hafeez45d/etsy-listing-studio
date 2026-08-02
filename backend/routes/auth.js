@@ -4,6 +4,8 @@ import { sessionStore } from '../utils/sessionStore.js';
 import { pushLog } from '../server.js';
 
 const ETSY_API_KEY = process.env.ETSY_API_KEY;
+const ETSY_SHARED_SECRET = process.env.ETSY_SHARED_SECRET;
+const API_KEY_HEADER = `${ETSY_API_KEY}:${ETSY_SHARED_SECRET}`;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 const ETSY_BASE = 'https://api.etsy.com/v3';
 const ETSY_AUTH_BASE = 'https://www.etsy.com';
@@ -92,7 +94,10 @@ export default function authRoutes(app) {
 
       const tokenRes = await fetch(`${ETSY_BASE}/public/oauth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'x-api-key': API_KEY_HEADER
+        },
         body: tokenBody
       });
 
@@ -117,7 +122,10 @@ export default function authRoutes(app) {
         console.log('=== FETCHING SHOP INFO ===');
         console.log('Access token length:', data.access_token?.length);
         const shopRes = await fetch(`${ETSY_BASE}/application/shops`, {
-          headers: { 'x-api-key': ETSY_API_KEY, 'Authorization': `Bearer ${data.access_token}` }
+          headers: {
+            'x-api-key': API_KEY_HEADER,
+            'Authorization': `Bearer ${data.access_token}`
+          }
         });
         console.log('Shop lookup HTTP status:', shopRes.status);
         const shopText = await shopRes.text();
@@ -159,7 +167,10 @@ export default function authRoutes(app) {
     try {
       const tokenRes = await fetch(`${ETSY_BASE}/public/oauth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'x-api-key': API_KEY_HEADER
+        },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
           client_id: ETSY_API_KEY,
@@ -201,7 +212,10 @@ export default function authRoutes(app) {
     }
     try {
       const shopRes = await fetch(`${ETSY_BASE}/application/shops/${tokenStore.shopId}`, {
-        headers: { 'x-api-key': ETSY_API_KEY, 'Authorization': `Bearer ${tokenStore.accessToken}` }
+        headers: {
+          'x-api-key': API_KEY_HEADER,
+          'Authorization': `Bearer ${tokenStore.accessToken}`
+        }
       });
       if (shopRes.ok) {
         const shop = await shopRes.json();

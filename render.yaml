@@ -12,4 +12,4 @@ services:
       - key: FRONTEND_URL
         value: https://hafeez45d.github.io/etsy-listing-studio/
       - key: ENCRYPTION_SECRET
-        generateValue: true
+        value: etsy-studio-prod-encryption-key-2025!
