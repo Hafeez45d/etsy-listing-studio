@@ -111,10 +111,6 @@ export default function listingRoutes(app) {
           .filter(t => t.length > 0)
           .slice(0, 13);
       }
-      // Etsy expects price in cents (integer), but user might send dollars
-      if (typeof body.price === 'number' && body.price < 100 && body.price > 0) {
-        body.price = Math.round(body.price * 100);
-      }
       console.log('=== CREATE LISTING PAYLOAD ===', JSON.stringify(body, null, 2));
       const response = await etsyFetch(`/application/shops/${tokenStore.shopId}/listings`, {
         method: 'POST',
