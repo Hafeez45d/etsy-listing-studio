@@ -83,10 +83,12 @@ export default function listingRoutes(app) {
   app.post('/api/listings', async (req, res) => {
     if (!tokenStore.isConnected()) return res.status(401).json({ error: 'Not connected' });
     try {
+      const body = { ...req.body };
+      if (Array.isArray(body.tags)) body.tags = body.tags.join(',');
       const response = await etsyFetch(`/application/shops/${tokenStore.shopId}/listings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body)
+        body: JSON.stringify(body)
       });
       const data = await response.json();
       res.status(response.status).json(data);
