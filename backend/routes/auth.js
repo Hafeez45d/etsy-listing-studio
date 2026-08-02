@@ -116,12 +116,14 @@ export default function authRoutes(app) {
       let shopId = null;
       let shopName = null;
 
-      // Fetch shop info
+      // Fetch shop info using user ID from access token prefix
       try {
         pushLog('Fetching shop info from Etsy...');
         console.log('=== FETCHING SHOP INFO ===');
         console.log('Access token length:', data.access_token?.length);
-        const shopRes = await fetch(`${ETSY_BASE}/application/shops`, {
+        const userId = data.access_token.split('.')[0];
+        console.log('Extracted user_id:', userId);
+        const shopRes = await fetch(`${ETSY_BASE}/application/users/${userId}/shops`, {
           headers: {
             'x-api-key': API_KEY_HEADER,
             'Authorization': `Bearer ${data.access_token}`
