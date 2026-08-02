@@ -1650,7 +1650,10 @@ async function publishListing() {
         });
 
         if (fileRes.ok) addStep(`File ${i + 1}/${state.uploadedFiles.length} uploaded`, 'success');
-        else addStep(`File ${i + 1} failed`, 'error');
+        else {
+          const errText = await fileRes.text();
+          addStep(`File ${i + 1} failed: ${errText}`, 'error');
+        }
       }
     }
 
@@ -1665,7 +1668,10 @@ async function publishListing() {
     });
 
     if (patchRes.ok) addStep('Listing activated (published)', 'success');
-    else addStep('Activation step returned: ' + patchRes.status, 'error');
+    else {
+      const errText = await patchRes.text();
+      addStep('Activation failed: ' + errText, 'error');
+    }
 
     const newListing = {
       id: listingId, etsyId: listingId, title: title,

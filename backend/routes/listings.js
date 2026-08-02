@@ -79,7 +79,7 @@ async function etsyFetch(path, options = {}) {
   return new Response(resText, { status: res.status, headers: res.headers });
 }
 
-export default function listingRoutes(app) {
+export default function listingRoutes(app, upload) {
 
   app.get('/api/listings', async (req, res) => {
     if (!tokenStore.isConnected()) return res.status(401).json({ error: 'Not connected' });
@@ -148,73 +148,115 @@ export default function listingRoutes(app) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  async function uploadWithRefresh(path, body, contentType) {
-    console.log('=== ETSY UPLOAD REQUEST ===');
-    console.log('URL:', path);
-    console.log('Content-Type:', contentType);
-    console.log('Body length:', body ? body.length : 0);
+  // Image upload
+  app.post('/api/listings/:listingId/images', upload.single('image'), async (req, res) => {
+    if (!tokenStore.isConnected()) return res.status(401).json({ error: 'Not connected' });
+    try {
+      if (!req.file) return res.status(400).json({ error: 'No image file provided' });
 
-    let res = await fetch(path, {
-      method: 'POST',
-      headers: {
-        'x-api-key': API_KEY_HEADER,
-        'Authorization': `Bearer ${tokenStore.accessToken}`,
-        'Content-Type': contentType
-      },
-      body
-    });
-    const resText = await res.text();
-    console.log('=== ETSY UPLOAD RESPONSE ===');
-    console.log('HTTP Status:', res.status);
-    console.log('Body:', resText.slice(0, 2000));
+      const formData = new FormData();
+      const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
+      formData.append('image', blob, req.file.originalname || 'image.jpg');
+      if (req.body.rank) formData.append('rank', req.body.rank);
 
-    if (res.status === 401 && tokenStore.refreshToken) {
-      const refreshed = await refreshTokenIfNeeded();
-      if (refreshed) {
-        console.log('=== ETSY UPLOAD RETRY (after refresh) ===');
-        res = await fetch(path, {
+      console.log('=== ETSY IMAGE UPLOAD ===');
+      console.log('File:', req.file.originalname, 'Size:', req.file.size, 'Type:', req.file.mimetype);
+
+      let imgRes = await fetch(
+        `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/images`,
+        {
           method: 'POST',
           headers: {
             'x-api-key': API_KEY_HEADER,
-            'Authorization': `Bearer ${tokenStore.accessToken}`,
-            'Content-Type': contentType
+            'Authorization': `Bearer ${tokenStore.accessToken}`
           },
-          body
-        });
-        const retryText = await res.text();
-        console.log('HTTP Status:', res.status);
-        console.log('Body:', retryText.slice(0, 2000));
-        return new Response(retryText, { status: res.status, headers: res.headers });
-      }
-    }
-    return new Response(resText, { status: res.status, headers: res.headers });
-  }
-
-  // Image upload
-  app.post('/api/listings/:listingId/images', async (req, res) => {
-    if (!tokenStore.isConnected()) return res.status(401).json({ error: 'Not connected' });
-    try {
-      const response = await uploadWithRefresh(
-        `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/images`,
-        req.body,
-        req.headers['content-type']
+          body: formData
+        }
       );
-      const data = await response.json();
-      res.status(response.status).json(data);
+      const resText = await imgRes.text();
+      console.log('=== ETSY IMAGE RESPONSE ===');
+      console.log('HTTP Status:', imgRes.status);
+      console.log('Body:', resText.slice(0, 2000));
+
+      if (imgRes.status === 401 && tokenStore.refreshToken) {
+        const refreshed = await refreshTokenIfNeeded();
+        if (refreshed) {
+          const fd2 = new FormData();
+          const blob2 = new Blob([req.file.buffer], { type: req.file.mimetype });
+          fd2.append('image', blob2, req.file.originalname || 'image.jpg');
+          if (req.body.rank) fd2.append('rank', req.body.rank);
+          imgRes = await fetch(
+            `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/images`,
+            {
+              method: 'POST',
+              headers: {
+                'x-api-key': API_KEY_HEADER,
+                'Authorization': `Bearer ${tokenStore.accessToken}`
+              },
+              body: fd2
+            }
+          );
+        }
+      }
+
+      try { res.status(imgRes.status).json(JSON.parse(resText)); }
+      catch { res.status(imgRes.status).json({ error: resText }); }
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   // File upload
-  app.post('/api/listings/:listingId/files', async (req, res) => {
+  app.post('/api/listings/:listingId/files', upload.single('file'), async (req, res) => {
     if (!tokenStore.isConnected()) return res.status(401).json({ error: 'Not connected' });
     try {
-      const response = await uploadWithRefresh(
+      if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+      const formData = new FormData();
+      const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
+      formData.append('file', blob, req.file.originalname || 'file.bin');
+      if (req.body.rank) formData.append('rank', req.body.rank);
+
+      console.log('=== ETSY FILE UPLOAD ===');
+      console.log('File:', req.file.originalname, 'Size:', req.file.size, 'Type:', req.file.mimetype);
+
+      let fileRes = await fetch(
         `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/files`,
-        req.body,
-        req.headers['content-type']
+        {
+          method: 'POST',
+          headers: {
+            'x-api-key': API_KEY_HEADER,
+            'Authorization': `Bearer ${tokenStore.accessToken}`
+          },
+          body: formData
+        }
       );
-      const data = await response.json();
-      res.status(response.status).json(data);
+      const resText = await fileRes.text();
+      console.log('=== ETSY FILE RESPONSE ===');
+      console.log('HTTP Status:', fileRes.status);
+      console.log('Body:', resText.slice(0, 2000));
+
+      if (fileRes.status === 401 && tokenStore.refreshToken) {
+        const refreshed = await refreshTokenIfNeeded();
+        if (refreshed) {
+          const fd2 = new FormData();
+          const blob2 = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
+          fd2.append('file', blob2, req.file.originalname || 'file.bin');
+          if (req.body.rank) fd2.append('rank', req.body.rank);
+          fileRes = await fetch(
+            `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/files`,
+            {
+              method: 'POST',
+              headers: {
+                'x-api-key': API_KEY_HEADER,
+                'Authorization': `Bearer ${tokenStore.accessToken}`
+              },
+              body: fd2
+            }
+          );
+        }
+      }
+
+      try { res.status(fileRes.status).json(JSON.parse(resText)); }
+      catch { res.status(fileRes.status).json({ error: resText }); }
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 

@@ -1,9 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import { tokenStore } from './utils/tokenStore.js';
 import authRoutes from './routes/auth.js';
 import listingRoutes from './routes/listings.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const PORT = process.env.PORT || 3000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://hafeez45d.github.io/etsy-listing-studio/';
@@ -30,10 +33,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Multipart body parsing for file/image upload routes
-app.use('/api/listings/:listingId/images', express.raw({ type: 'multipart/form-data', limit: '20mb' }));
-app.use('/api/listings/:listingId/files', express.raw({ type: 'multipart/form-data', limit: '20mb' }));
-
 // Root
 app.get('/', (req, res) => {
   res.json({ status: 'ok', connected: tokenStore.isConnected() });
@@ -46,7 +45,7 @@ app.get('/api/health', (req, res) => {
 
 // Routes
 authRoutes(app);
-listingRoutes(app);
+listingRoutes(app, upload);
 
 // Debug: view recent callback logs
 app.get('/debug/logs', (req, res) => {
