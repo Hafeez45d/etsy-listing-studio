@@ -979,6 +979,34 @@ const state = {
   etsyShopName: null
 };
 
+// ─── LOCALSTORAGE PERSISTENCE ────────────────
+// Older versions saved full base64 thumbnails into listing history, overflowing the ~5MB
+// localStorage quota. Strip them on load and never let a save throw.
+function stripOversizedThumbs() {
+  state.listings.forEach(l => {
+    if (typeof l.imageUrl === 'string' && l.imageUrl.startsWith('data:')) l.imageUrl = '';
+  });
+}
+
+function saveListings() {
+  try {
+    localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+    return true;
+  } catch (e) {
+    stripOversizedThumbs();
+    try {
+      localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+      return true;
+    } catch (e2) {
+      showToast('Browser storage is full — listing history not saved', 'error');
+      return false;
+    }
+  }
+}
+
+stripOversizedThumbs();
+saveListings();
+
 // ─── SETTINGS MANAGEMENT ────────────────────
 function loadSettings() {
   const keys = ['geminiApiKey','geminiModel', 'openaiApiKey','openaiModel','deepseekApiKey','deepseekModel',
@@ -1502,7 +1530,7 @@ function saveDraft() {
   const draftListing = { id: 'draft-current', ...draft, status: 'draft', createdAt: new Date().toISOString() };
   if (existing >= 0) state.listings[existing] = draftListing;
   else state.listings.unshift(draftListing);
-  localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+  saveListings();
 
   showToast('Draft saved!');
 }
@@ -1618,6 +1646,7 @@ async function publishListing() {
 
     // Step 2: Upload images
     addStep('Uploading images...');
+    let firstImageUrl = '';
     for (let i = 0; i < state.uploadedImages.length; i++) {
       const img = state.uploadedImages[i];
       const formData = new FormData();
@@ -1631,11 +1660,19 @@ async function publishListing() {
         body: formData
       });
 
-      if (imgRes.ok) addStep(`Image ${i + 1}/${state.uploadedImages.length} uploaded`, 'success');
-      else addStep(`Image ${i + 1} failed`, 'error');
+      if (imgRes.ok) {
+        addStep(`Image ${i + 1}/${state.uploadedImages.length} uploaded`, 'success');
+        if (i === 0) {
+          try {
+            const imgData = await imgRes.json();
+            firstImageUrl = imgData.url_570xN || imgData.url_fullxfull || imgData.url_75x75 || '';
+          } catch (e) {}
+        }
+      } else addStep(`Image ${i + 1} failed`, 'error');
     }
 
     // Step 3: Upload digital files
+    let filesUploadedOk = true;
     if (listingType === 'download' && state.uploadedFiles.length > 0) {
       addStep('Uploading digital files...');
       for (let i = 0; i < state.uploadedFiles.length; i++) {
@@ -1651,36 +1688,41 @@ async function publishListing() {
 
         if (fileRes.ok) addStep(`File ${i + 1}/${state.uploadedFiles.length} uploaded`, 'success');
         else {
+          filesUploadedOk = false;
           const errText = await fileRes.text();
           addStep(`File ${i + 1} failed: ${errText}`, 'error');
         }
       }
     }
 
-    // Step 4: Activate
-    addStep('Activating listing...');
-    const patchBody = new URLSearchParams();
-    patchBody.append('state', 'active');
-    const patchRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: patchBody.toString()
-    });
+    // Step 4: Activate (Etsy refuses to activate a digital listing with no downloadable file)
+    if (listingType === 'download' && !filesUploadedOk) {
+      addStep('Skipping activation — a digital listing needs a downloadable file before it can go live', 'error');
+    } else {
+      addStep('Activating listing...');
+      const patchBody = new URLSearchParams();
+      patchBody.append('state', 'active');
+      const patchRes = await fetch(`${BACKEND_URL}/api/listings/${listingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: patchBody.toString()
+      });
 
-    if (patchRes.ok) addStep('Listing activated (published)', 'success');
-    else {
-      const errText = await patchRes.text();
-      addStep('Activation failed: ' + errText, 'error');
+      if (patchRes.ok) addStep('Listing activated (published)', 'success');
+      else {
+        const errText = await patchRes.text();
+        addStep('Activation failed: ' + errText, 'error');
+      }
     }
 
     const newListing = {
       id: listingId, etsyId: listingId, title: title,
       price: parseFloat(document.getElementById('listingPrice').value) || 0,
       status: 'published', state: 'active',
-      publishedAt: new Date().toISOString(), imageUrl: state.uploadedImages[0]?.data || ''
+      publishedAt: new Date().toISOString(), imageUrl: firstImageUrl
     };
     state.listings.unshift(newListing);
-    localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+    saveListings();
     localStorage.removeItem('etsyStudio_draft');
 
     addStep('✓ Listing published successfully!', 'success');
@@ -1710,7 +1752,7 @@ async function etsyUpdateState(listingId, newState) {
       if (listing) {
         listing.state = newState;
         listing.status = newState === 'active' ? 'published' : newState;
-        localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+        saveListings();
       }
       showToast(`Listing ${newState === 'active' ? 'activated' : 'deactivated'}`);
       loadDashboard();
@@ -1912,7 +1954,7 @@ function loadDashboard() {
 
 function deleteListing(id) {
   state.listings = state.listings.filter(l => l.id !== id);
-  localStorage.setItem('etsyStudio_listings', JSON.stringify(state.listings));
+  saveListings();
   loadDashboard();
   showToast('Listing removed');
 }

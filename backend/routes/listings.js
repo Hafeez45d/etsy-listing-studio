@@ -210,13 +210,15 @@ export default function listingRoutes(app, upload) {
     try {
       if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
+      const fileName = req.file.originalname || 'file.bin';
       const formData = new FormData();
       const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
-      formData.append('file', blob, req.file.originalname || 'file.bin');
+      formData.append('file', blob, fileName);
+      formData.append('name', fileName);
       if (req.body.rank) formData.append('rank', req.body.rank);
 
       console.log('=== ETSY FILE UPLOAD ===');
-      console.log('File:', req.file.originalname, 'Size:', req.file.size, 'Type:', req.file.mimetype);
+      console.log('File:', fileName, 'Size:', req.file.size, 'Type:', req.file.mimetype);
 
       let fileRes = await fetch(
         `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/files`,
@@ -239,7 +241,8 @@ export default function listingRoutes(app, upload) {
         if (refreshed) {
           const fd2 = new FormData();
           const blob2 = new Blob([req.file.buffer], { type: req.file.mimetype || 'application/octet-stream' });
-          fd2.append('file', blob2, req.file.originalname || 'file.bin');
+          fd2.append('file', blob2, fileName);
+          fd2.append('name', fileName);
           if (req.body.rank) fd2.append('rank', req.body.rank);
           fileRes = await fetch(
             `${ETSY_BASE}/application/shops/${tokenStore.shopId}/listings/${req.params.listingId}/files`,
